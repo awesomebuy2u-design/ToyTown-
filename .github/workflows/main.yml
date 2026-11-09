@@ -89,7 +89,7 @@ jobs:
 
           for line in lines:
               if line.startswith("distributionUrl="):
-                  path.write_text("\n".join(output) + "\n")
+              output.append(distribution)
                   replaced = True
               else:
                   output.append(line)
