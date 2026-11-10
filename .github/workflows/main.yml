@@ -25,7 +25,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -36,7 +35,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           if [ -f "$GITHUB_WORKSPACE/pubspec.yaml" ]; then
             PROJECT_DIR="$GITHUB_WORKSPACE"
           else
@@ -49,7 +47,6 @@ jobs:
             EXTRACT_DIR="$RUNNER_TEMP/toytown-src"
             mkdir -p "$EXTRACT_DIR"
             unzip -q "$ZIP" -d "$EXTRACT_DIR"
-
             mapfile -t PROJECTS < <(find "$EXTRACT_DIR" -type f -name pubspec.yaml -not -path '*/.dart_tool/*' -printf '%h\n')
             if [ "${#PROJECTS[@]}" -ne 1 ]; then
               echo "ERROR: Expected one Flutter project in the ZIP; found ${#PROJECTS[@]}."
@@ -61,7 +58,6 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "ToyTown project: $PROJECT_DIR"
-
       - name: Generate Android platform files and configure Gradle
         shell: bash
         run: |
@@ -70,7 +66,6 @@ jobs:
           if [ ! -f "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties" ] || [ ! -f "$PROJECT_DIR/android/gradlew" ]; then
             flutter create --platforms=android --org ua.toytown "$PROJECT_DIR"
           fi
-
           WRAPPER="$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
           if [ ! -f "$WRAPPER" ]; then
             echo "ERROR: Gradle wrapper properties were not generated."
@@ -89,15 +84,14 @@ jobs:
 
           for line in lines:
               if line.startswith("distributionUrl="):
-              output.append(distribution)
+                  output.append(distribution)
                   replaced = True
               else:
                   output.append(line)
-
           if not replaced:
               output.append(distribution)
 
-          path.write_text("\\n".join(output) + "\\n")
+          path.write_text("\n".join(output) + "\n")
           PY
 
           chmod +x "$PROJECT_DIR/android/gradlew"
@@ -107,7 +101,6 @@ jobs:
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
-
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
         env:
@@ -117,7 +110,6 @@ jobs:
           flutter build apk --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -125,4 +117,3 @@ jobs:
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
-          
