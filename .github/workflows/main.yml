@@ -95,6 +95,61 @@ jobs:
           PY
 
           chmod +x "$PROJECT_DIR/android/gradlew"
+
+          # Update Android Gradle Plugin and Kotlin Gradle Plugin for Flutter 3.47+.
+          python3 - "$PROJECT_DIR/android" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          android = Path(sys.argv[1])
+          files = [
+              android / "settings.gradle",
+              android / "settings.gradle.kts",
+              android / "build.gradle",
+              android / "build.gradle.kts",
+          ]
+
+          changed = []
+          for path in files:
+              if not path.exists():
+                  continue
+              text = path.read_text()
+              original = text
+              text = re.sub(
+                  r'((?:id\s*\(?\s*["\']com\.android\.(?:application|library)["\']\s*\)?\s*version\s*["\']))8\.\d+\.\d+(["\'])',
+                  r'\g<1>8.11.1\2',
+                  text,
+              )
+              text = re.sub(
+                  r'((?:id\s*\(?\s*["\']org\.jetbrains\.kotlin\.(?:android|kotlin-android)["\']\s*\)?\s*version\s*["\']))[0-9.]+(["\'])',
+                  r'\g<1>2.2.20\2',
+                  text,
+              )
+              text = re.sub(
+                  r'(com\.android\.tools\.build:gradle:)[0-9.]+',
+                  r'\g<1>8.11.1',
+                  text,
+              )
+              text = re.sub(
+                  r'(kotlin_version\s*=\s*["\'])[0-9.]+(["\'])',
+                  r'\g<1>2.2.20\2',
+                  text,
+              )
+              if text != original:
+                  path.write_text(text)
+                  changed.append(str(path))
+
+          print("Updated Android build files:" if changed else "No version declarations changed.")
+          for item in changed:
+              print(item)
+          for path in files:
+              if path.exists():
+                  for line in path.read_text().splitlines():
+                      if any(key in line for key in ("com.android.application", "com.android.tools.build:gradle", "org.jetbrains.kotlin", "kotlin_version")):
+                          print(f"{path.name}: {line.strip()}")
+          PY
+
           echo "Configured Gradle:"
           grep '^distributionUrl=' "$WRAPPER"
 
@@ -117,3 +172,4 @@ jobs:
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
+          
