@@ -156,7 +156,7 @@ jobs:
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
-            - name: Build release APK
+      - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
