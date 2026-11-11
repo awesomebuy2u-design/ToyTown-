@@ -149,22 +149,39 @@ jobs:
                       if any(key in line for key in ("com.android.application", "com.android.tools.build:gradle", "org.jetbrains.kotlin", "kotlin_version")):
                           print(f"{path.name}: {line.strip()}")
           PY
-
+          
           echo "Configured Gradle:"
           grep '^distributionUrl=' "$WRAPPER"
 
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
-      - name: Build release APK
+            - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        shell: bash
         run: |
+          set +e
           flutter build apk --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+          BUILD_STATUS=$?
+          set -e
+
+          APK="$(find "$PROJECT_DIR/build" "$PROJECT_DIR/android/app/build/outputs" \
+            -type f -name '*.apk' -print -quit 2>/dev/null || true)"
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK was produced."
+            find "$PROJECT_DIR/build" -type f | tail -100
+            exit 1
+          fi
+          
+          mkdir -p "$PROJECT_DIR/build/app/outputs/flutter-apk"
+          cp "$APK" "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          ls -lh "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
