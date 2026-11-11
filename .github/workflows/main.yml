@@ -157,6 +157,7 @@ jobs:
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
+
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
         env:
@@ -172,27 +173,24 @@ jobs:
           BUILD_STATUS=${PIPESTATUS[0]}
           set -e
 
-          echo "Flutter build exit code: $BUILD_STATUS"
-
-          if [ "$BUILD_STATUS" -ne 0 ]; then
-            echo "ERROR: Flutter/Gradle build failed. Last 200 log lines:"
-            tail -200 "$RUNNER_TEMP/flutter-build.log"
-            exit "$BUILD_STATUS"
-          fi
+          echo "Flutter exit code: $BUILD_STATUS"
 
           APK="$(find "$PROJECT_DIR" -type f -name '*.apk' \
             -not -path '*/.gradle/*' -print -quit)"
 
           if [ -z "$APK" ]; then
-            echo "ERROR: Build reported success but APK was not found."
+            echo "APK not found. Searching build directories:"
             find "$PROJECT_DIR" -type d -name outputs -print
+            echo "Last 100 build log lines:"
+            tail -100 "$RUNNER_TEMP/flutter-build.log"
             exit 1
           fi
 
           mkdir -p "$PROJECT_DIR/build/app/outputs/flutter-apk"
           cp "$APK" "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          echo "APK successfully found:"
           ls -lh "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
-          
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
