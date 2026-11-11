@@ -190,7 +190,27 @@ jobs:
           cp "$APK" "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
           echo "APK successfully found:"
           ls -lh "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+      - name: Sign APK for Android installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          APKSIGNER="$(find "$SDK/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
 
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+
+          "$APKSIGNER" sign --ks "$HOME/.android/debug.keystore" \
+            --ks-key-alias androiddebugkey --ks-pass pass:android \
+            --key-pass pass:android --out "$APK.signed" "$APK"
+          mv "$APK.signed" "$APK"
+          "$APKSIGNER" verify --verbose "$APK"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
