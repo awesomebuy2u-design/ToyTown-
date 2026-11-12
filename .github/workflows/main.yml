@@ -166,7 +166,8 @@ jobs:
         shell: bash
         run: |
           set +e
-flutter build apk --release --verbose --android-skip-build-dependency-validation \
+          flutter build apk --release --verbose 
+            --android-skip-build-dependency-validation \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             2>&1 | tee "$RUNNER_TEMP/flutter-build.log"
