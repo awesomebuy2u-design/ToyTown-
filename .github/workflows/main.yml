@@ -167,6 +167,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          set +e
           mkdir -p "$RUNNER_TEMP"
 
           echo "Starting Flutter release build..."
@@ -176,6 +177,7 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/flutter-build.log"
           FLUTTER_STATUS=${PIPESTATUS[0]}
           echo "Flutter exit code: $FLUTTER_STATUS"
+          set -e
 
           APK="$(find "$PROJECT_DIR" -type f -iname '*.apk' \
             -not -path '*/.gradle/*' -not -path '*/build/intermediates/*' -print -quit)"
