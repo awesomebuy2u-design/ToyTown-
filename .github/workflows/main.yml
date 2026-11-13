@@ -165,30 +165,41 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         shell: bash
         run: |
-          set +e
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP"
+
+          echo "Starting Flutter release build..."
           flutter build apk --release --verbose --android-skip-build-dependency-validation \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             2>&1 | tee "$RUNNER_TEMP/flutter-build.log"
-          BUILD_STATUS=${PIPESTATUS[0]}
-          set -e
+          FLUTTER_STATUS=${PIPESTATUS[0]}
+          echo "Flutter exit code: $FLUTTER_STATUS"
 
-          echo "Flutter exit code: $BUILD_STATUS"
-
-          APK="$(find "$PROJECT_DIR" -type f -name '*.apk' \
-            -not -path '*/.gradle/*' -print -quit)"
+          APK="$(find "$PROJECT_DIR" -type f -iname '*.apk' \
+            -not -path '*/.gradle/*' -not -path '*/build/intermediates/*' -print -quit)"
 
           if [ -z "$APK" ]; then
-            echo "APK not found. Searching build directories:"
-            find "$PROJECT_DIR" -type d -name outputs -print
-            echo "Last 100 build log lines:"
-            tail -100 "$RUNNER_TEMP/flutter-build.log"
+            echo "Flutter did not place an APK. Running Gradle assembleRelease directly..."
+            cd "$PROJECT_DIR/android"
+            ./gradlew --no-daemon --stacktrace :app:assembleRelease
+            cd "$PROJECT_DIR"
+            APK="$(find "$PROJECT_DIR" -type f -iname '*.apk' \
+              -not -path '*/.gradle/*' -not -path '*/build/intermediates/*' -print -quit)"
+          fi
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK was generated."
+            echo "APK/Gradle output directories:"
+            find "$PROJECT_DIR" -type d \( -name apk -o -name outputs -o -name flutter-apk \) -print
+            echo "Gradle failure details:"
+            grep -n -A12 -B5 -E 'FAILURE:|What went wrong:|Execution failed|Could not|error:' "$RUNNER_TEMP/flutter-build.log" | tail -160 || true
             exit 1
           fi
 
           mkdir -p "$PROJECT_DIR/build/app/outputs/flutter-apk"
           cp "$APK" "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
-          echo "APK successfully found:"
+          echo "Release APK ready:"
           ls -lh "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
       - name: Sign APK for Android installation
         shell: bash
