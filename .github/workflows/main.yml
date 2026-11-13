@@ -59,6 +59,20 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "ToyTown project: $PROJECT_DIR"
+      - name: Inspect ToyTown source structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== SOURCE FILES ==="
+          find "$PROJECT_DIR" -maxdepth 5 -type f \\
+            -not -path '*/.dart_tool/*' -not -path '*/build/*' \\
+            -not -path '*/.git/*' | sort | head -250
+          echo "=== PUBSPEC ==="
+          sed -n '1,220p' "$PROJECT_DIR/pubspec.yaml"
+          echo "=== APP ENTRY POINT ==="
+          for f in "$PROJECT_DIR/lib/main.dart" "$PROJECT_DIR/lib/app.dart"; do
+            if [ -f "$f" ]; then echo "--- $f"; sed -n '1,260p' "$f"; fi
+          done
       - name: Generate Android platform files and configure Gradle
         shell: bash
         run: |
