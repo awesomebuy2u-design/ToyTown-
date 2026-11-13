@@ -64,9 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== SOURCE FILES ==="
-          find "$PROJECT_DIR" -maxdepth 5 -type f \\
-            -not -path '*/.dart_tool/*' -not -path '*/build/*' \\
-            -not -path '*/.git/*' | sort | head -250
+          find "$PROJECT_DIR" -maxdepth 5 -type f -not -path '*/.dart_tool/*' -not -path '*/build/*' -not -path '*/.git/*' | sort | head -250
           echo "=== PUBSPEC ==="
           sed -n '1,220p' "$PROJECT_DIR/pubspec.yaml"
           echo "=== APP ENTRY POINT ==="
