@@ -78,7 +78,7 @@ jobs:
 
           path = Path(sys.argv[1])
           lines = path.read_text().splitlines() if path.exists() else []
-          distribution = "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.5.0-all.zip"
+          distribution = "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-all.zip"
           output = []
           replaced = False
 
@@ -118,12 +118,12 @@ jobs:
               original = text
               text = re.sub(
                   r'((?:id\s*\(?\s*["\']com\.android\.(?:application|library)["\']\s*\)?\s*version\s*["\']))8\.\d+\.\d+(["\'])',
-                  r'\g<1>9.3.1\2',
+                  r'\g<1>8.11.1\2',
                   text,
               )
               text = re.sub(
                   r'((?:id\s*\(?\s*["\']org\.jetbrains\.kotlin\.(?:android|kotlin-android)["\']\s*\)?\s*version\s*["\']))[0-9.]+(["\'])',
-                  r'\g<1>2.4.20\2',
+                  r'\g<1>2.2.20\2',
                   text,
               )
               text = re.sub(
@@ -133,7 +133,7 @@ jobs:
               )
               text = re.sub(
                   r'(kotlin_version\s*=\s*["\'])[0-9.]+(["\'])',
-                  r'\g<1>2.4.20\2',
+                  r'\g<1>2.2.20\2',
                   text,
               )
               if text != original:
