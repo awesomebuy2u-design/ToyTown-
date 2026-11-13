@@ -78,7 +78,7 @@ jobs:
 
           path = Path(sys.argv[1])
           lines = path.read_text().splitlines() if path.exists() else []
-          distribution = "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.1.0-all.zip"
+          distribution = "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-all.zip"
           output = []
           replaced = False
 
@@ -154,8 +154,6 @@ jobs:
           grep '^distributionUrl=' "$WRAPPER"
           echo 'org.gradle.vfs.watch=false' >> "$PROJECT_DIR/android/gradle.properties"
           echo 'org.gradle.daemon=false' >> "$PROJECT_DIR/android/gradle.properties"
-          echo 'android.newDsl=false' >> "$PROJECT_DIR/android/gradle.properties"
-          echo 'android.builtInKotlin=false' >> "$PROJECT_DIR/android/gradle.properties"
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
