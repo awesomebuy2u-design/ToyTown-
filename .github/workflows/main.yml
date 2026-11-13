@@ -118,7 +118,7 @@ jobs:
               original = text
               text = re.sub(
                   r'((?:id\s*\(?\s*["\']com\.android\.(?:application|library)["\']\s*\)?\s*version\s*["\']))8\.\d+\.\d+(["\'])',
-                  r'\g<1>9.0.0\2',
+                  r'\g<1>8.13.2\2',
                   text,
               )
               text = re.sub(
@@ -128,7 +128,7 @@ jobs:
               )
               text = re.sub(
                   r'(com\.android\.tools\.build:gradle:)[0-9.]+',
-                  r'\g<1>9.0.0',
+                  r'\g<1>8.13.2',
                   text,
               )
               text = re.sub(
