@@ -154,6 +154,8 @@ jobs:
           grep '^distributionUrl=' "$WRAPPER"
           echo 'org.gradle.vfs.watch=false' >> "$PROJECT_DIR/android/gradle.properties"
           echo 'org.gradle.daemon=false' >> "$PROJECT_DIR/android/gradle.properties"
+          echo 'android.newDsl=false' >> "$PROJECT_DIR/android/gradle.properties"
+          echo 'android.builtInKotlin=false' >> "$PROJECT_DIR/android/gradle.properties"
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
