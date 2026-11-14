@@ -285,44 +285,45 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         shell: bash
         run: |
-          set -uo pipefail
-          set +e
-          mkdir -p "$RUNNER_TEMP"
+          set -euo pipefail
+          # Never allow an APK from an earlier build to be packaged.
+          rm -rf "$PROJECT_DIR/build" "$PROJECT_DIR/android/app/build"
+          flutter clean
+          flutter pub get
 
-          echo "Starting Flutter release build..."
-          flutter build apk --release --verbose --android-skip-build-dependency-validation \
+          echo "Building a fresh release APK..."
+          if ! flutter build apk --release --android-skip-build-dependency-validation \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-            2>&1 | tee "$RUNNER_TEMP/flutter-build.log"
-          FLUTTER_STATUS=${PIPESTATUS[0]}
-          echo "Flutter exit code: $FLUTTER_STATUS"
-          set -e
-
-          APK="$(find "$PROJECT_DIR" -type f -iname '*.apk' \
-            -not -path '*/.gradle/*' -not -path '*/build/intermediates/*' -print -quit)"
-
-          if [ -z "$APK" ]; then
-            echo "Flutter did not place an APK. Running Gradle assembleRelease directly..."
-            cd "$PROJECT_DIR/android"
-            ./gradlew --no-daemon --stacktrace :app:assembleRelease
-            cd "$PROJECT_DIR"
-            APK="$(find "$PROJECT_DIR" -type f -iname '*.apk' \
-              -not -path '*/.gradle/*' -not -path '*/build/intermediates/*' -print -quit)"
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"; then
+            echo "Flutter wrapper failed; running the release Gradle task directly."
+            (cd "$PROJECT_DIR/android" && ./gradlew --no-daemon --stacktrace :app:assembleRelease)
           fi
 
+          CANDIDATES=(
+            "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+            "$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk"
+          )
+          APK=""
+          for candidate in "${CANDIDATES[@]}"; do
+            if [ -s "$candidate" ]; then APK="$candidate"; break; fi
+          done
           if [ -z "$APK" ]; then
-            echo "ERROR: No APK was generated."
-            echo "APK/Gradle output directories:"
-            find "$PROJECT_DIR" -type d \( -name apk -o -name outputs -o -name flutter-apk \) -print
-            echo "Gradle failure details:"
-            grep -n -A12 -B5 -E 'FAILURE:|What went wrong:|Execution failed|Could not|error:' "$RUNNER_TEMP/flutter-build.log" | tail -160 || true
+            echo "ERROR: Fresh release APK was not generated."
+            find "$PROJECT_DIR" -type f -iname '*.apk' -printf '%p %s bytes\\n' || true
             exit 1
           fi
 
           mkdir -p "$PROJECT_DIR/build/app/outputs/flutter-apk"
           cp "$APK" "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
-          echo "Release APK ready:"
-          ls -lh "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          FINAL_APK="$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$FINAL_APK"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          AAPT="$(find "$SDK/build-tools" -type f -name aapt -o -name aapt2 | sort -V | tail -n 1)"
+          if [ -z "$AAPT" ]; then echo "ERROR: Android aapt tool not found"; exit 1; fi
+          "$AAPT" dump badging "$FINAL_APK" | head -n 5
+          echo "Fresh release APK:"
+          sha256sum "$FINAL_APK"
+          ls -lh "$FINAL_APK"
       - name: Sign APK for Android installation
         shell: bash
         run: |
