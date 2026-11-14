@@ -205,9 +205,9 @@ jobs:
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"; then
             echo "Flutter wrapper failed; retrying Gradle with the same Supabase Dart defines."
-            DART_DEFINE_URL="$(printf '%s' "SUPABASE_URL=$SUPABASE_URL" | base64 -w 0)"
-    DART_DEFINE_KEY="$(printf '%s' "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" | base64 -w 0)"
-    DART_DEFINES="$DART_DEFINE_URL,$DART_DEFINE_KEY"
+                        DART_DEFINE_URL="$(printf '%s' "SUPABASE_URL=$SUPABASE_URL" | base64 -w 0)"
+            DART_DEFINE_KEY="$(printf '%s' "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" | base64 -w 0)"
+            DART_DEFINES="$DART_DEFINE_URL,$DART_DEFINE_KEY"
             (cd "$PROJECT_DIR/android" && ./gradlew --no-daemon --stacktrace -Pdart-defines="$DART_DEFINES" :app:assembleRelease)
           fi
 
