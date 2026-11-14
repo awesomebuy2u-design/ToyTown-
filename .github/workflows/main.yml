@@ -301,7 +301,9 @@ jobs:
 
           CANDIDATES=(
             "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+            "$PROJECT_DIR/android/build/app/outputs/flutter-apk/app-release.apk"
             "$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk"
+            "$PROJECT_DIR/android/build/app/outputs/apk/release/app-release-unsigned.apk"
           )
           APK=""
           for candidate in "${CANDIDATES[@]}"; do
