@@ -281,8 +281,8 @@ jobs:
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: https://nmiafhzpzhowzfgdtotb.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_4yQLa04u-ngF9qELHKbywg_0qyPXxcq
         shell: bash
         run: |
           set -euo pipefail
