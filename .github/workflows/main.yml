@@ -65,10 +65,11 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import os
           import re
-          p = Path("$PROJECT_DIR/lib/main.dart")
+          p = Path(os.environ["PROJECT_DIR"]) / "lib" / "main.dart"
           source = p.read_text(encoding="utf-8")
-          pattern = r"class SetupScreen extends StatelessWidget \\{.*?\\n\\}\\n\\nclass AuthGate"
+          pattern = r"class SetupScreen extends StatelessWidget \{.*?\n\}\n\nclass AuthGate"
           replacement = r'''class SetupScreen extends StatelessWidget {
             const SetupScreen({super.key});
             static const purple = Color(0xFF6C63D9);
