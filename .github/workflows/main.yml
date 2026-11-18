@@ -39,7 +39,7 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/pubspec.yaml" ]; then
             PROJECT_DIR="$GITHUB_WORKSPACE"
           else
-          ZIP="$GITHUB_WORKSPACE/ToyTown_Android_v1.0.3.zip"
+          ZIP="$GITHUB_WORKSPACE/ToyTown_Android_v1.0.4.zip"
             if [ ! -f "$ZIP" ]; then
               echo "ERROR: Expected ToyTown archive was not found."
               exit 1
