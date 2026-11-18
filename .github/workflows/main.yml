@@ -39,7 +39,7 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/pubspec.yaml" ]; then
             PROJECT_DIR="$GITHUB_WORKSPACE"
           else
-          ZIP="$GITHUB_WORKSPACE/ToyTown_Android_v1.0.2.zip"
+          ZIP="$GITHUB_WORKSPACE/ToyTown_Android_v1.0.3.zip"
             if [ ! -f "$ZIP" ]; then
               echo "ERROR: Expected ToyTown archive was not found."
               exit 1
@@ -224,6 +224,12 @@ jobs:
           echo "Fresh release APK:"
           sha256sum "$FINAL_APK"
           ls -lh "$FINAL_APK"
+      - name: Restore test signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: toytown-android-test-signing-v1
+
       - name: Sign APK for Android installation
         shell: bash
         run: |
