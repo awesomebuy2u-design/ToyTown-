@@ -39,7 +39,7 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/pubspec.yaml" ]; then
             PROJECT_DIR="$GITHUB_WORKSPACE"
           else
-          ZIP="$GITHUB_WORKSPACE/ToyTown_Android_v1.0.4.zip"
+          ZIP="$GITHUB_WORKSPACE/ToyTown_Android_v1.0.5.zip"
             if [ ! -f "$ZIP" ]; then
               echo "ERROR: Expected ToyTown archive was not found."
               exit 1
@@ -170,6 +170,10 @@ jobs:
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
+
+      - name: Test Flutter application
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter test
 
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
