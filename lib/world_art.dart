@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 /// Raster fur sprites with lightweight transforms; no video/network dependency.
 class PetScene extends StatefulWidget {
   const PetScene({super.key, required this.kind, required this.name, required this.grown,
-    required this.hat, required this.bow, required this.outfit});
-  final String kind, name, outfit;
+    required this.hat, required this.bow, required this.outfit,
+    this.activity = 'stroke', this.reaction = 0});
+  final String kind, name, outfit, activity;
+  final int reaction;
   final bool grown, hat, bow;
   @override
   State<PetScene> createState() => _PetSceneState();
@@ -18,6 +20,13 @@ class _PetSceneState extends State<PetScene> with TickerProviderStateMixin {
     super.didChangeDependencies();
     if (MediaQuery.disableAnimationsOf(context)) { idle.stop(); delight.stop(); }
     else if (!idle.isAnimating) { idle.repeat(reverse: true); }
+  }
+  @override
+  void didUpdateWidget(covariant PetScene oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reaction != widget.reaction && !MediaQuery.disableAnimationsOf(context)) {
+      delight.forward(from: 0);
+    }
   }
   @override
   void dispose() { idle.dispose(); delight.dispose(); super.dispose(); }
@@ -46,7 +55,7 @@ class _PetSceneState extends State<PetScene> with TickerProviderStateMixin {
                   Positioned.fill(child: Image.asset('assets/pets/${widget.kind}.webp', fit: BoxFit.contain, excludeFromSemantics: true)),
                   Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _PetClothes(kind: widget.kind, hat: widget.hat, bow: widget.bow, outfit: widget.outfit)))),
                 ]))))),
-            if (jump > .05) Positioned(top: 32-jump*15, right: 54, child: Opacity(opacity: jump.clamp(0.0,1.0).toDouble(), child: const Icon(Icons.favorite_rounded,color:Color(0xFFE98599),size:32))),
+            if (jump > .05) Positioned(top: 32-jump*15, right: 54, child: Opacity(opacity: jump.clamp(0.0,1.0).toDouble(), child: Icon(widget.activity == 'feed' ? Icons.restaurant_rounded : widget.activity == 'play' ? Icons.sports_tennis_rounded : widget.activity == 'brush' ? Icons.auto_awesome_rounded : Icons.favorite_rounded,color:const Color(0xFFE98599),size:32))),
             const Positioned(bottom: 7, right: 14, child: Text('Погладь мене ♡',style:TextStyle(fontSize:12,color:Color(0xFF456555)))),
           ]);
         }),
@@ -100,8 +109,9 @@ void _star(Canvas c,Offset center,double r,Color color) {
 }
 
 class ShopScene extends StatefulWidget {
- const ShopScene({super.key,required this.balloons,required this.flowers,required this.awning,this.onTap});
+ const ShopScene({super.key,required this.balloons,required this.flowers,required this.awning,this.onTap,this.theme='mint'});
  final bool balloons,flowers,awning;
+ final String theme;
  final VoidCallback? onTap;
  @override
  State<ShopScene> createState()=>_ShopSceneState();
@@ -113,27 +123,30 @@ class _ShopSceneState extends State<ShopScene> with SingleTickerProviderStateMix
  @override
  void dispose(){motion.dispose();super.dispose();}
  @override
- Widget build(BuildContext context)=>Semantics(label:'Світла іграшкова крамничка${widget.balloons?', з кульками':''}${widget.flowers?', з квітами':''}${widget.awning?', з барвистим навісом':''}',button:widget.onTap!=null,
+ Widget build(BuildContext context)=>Semantics(label:'${widget.theme == 'lavender' ? 'Лавандова' : widget.theme == 'sunset' ? 'Сонячна' : 'М’ятна'} іграшкова крамничка${widget.balloons?', з кульками':''}${widget.flowers?', з квітами':''}${widget.awning?', з барвистим навісом':''}',button:widget.onTap!=null,
  child:GestureDetector(onTap:widget.onTap,child:AspectRatio(aspectRatio:1.25,child:ClipRRect(borderRadius:BorderRadius.circular(30),
- child:AnimatedBuilder(animation:motion,builder:(context,_)=>CustomPaint(painter:_ShopPainter(balloons:widget.balloons,flowers:widget.flowers,awning:widget.awning,t:MediaQuery.disableAnimationsOf(context)?0:motion.value)))))));
+ child:AnimatedBuilder(animation:motion,builder:(context,_)=>CustomPaint(painter:_ShopPainter(balloons:widget.balloons,flowers:widget.flowers,awning:widget.awning,theme:widget.theme,t:MediaQuery.disableAnimationsOf(context)?0:motion.value)))))));
 }
 class _ShopPainter extends CustomPainter {
- _ShopPainter({required this.balloons,required this.flowers,required this.awning,required this.t});
- final bool balloons,flowers,awning;final double t;
+ _ShopPainter({required this.balloons,required this.flowers,required this.awning,required this.theme,required this.t});
+ final bool balloons,flowers,awning;final String theme;final double t;
  @override
  void paint(Canvas c,Size s){
  c.scale(s.width/400,s.height/320);
  final p=Paint();
- c.drawRect(const Rect.fromLTWH(0,0,400,320),p..shader=const LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Color(0xFFD8F3FB),Color(0xFFFFF8E6)]).createShader(const Rect.fromLTWH(0,0,400,320)));p.shader=null;
+ final roofColor=theme=='lavender'?const Color(0xFFA899CD):theme=='sunset'?const Color(0xFFE6AB76):const Color(0xFF79BAAB);
+ final skyColor=theme=='lavender'?const Color(0xFFEAE4FA):theme=='sunset'?const Color(0xFFFFE5CC):const Color(0xFFD8F3FB);
+ final wallColor=theme=='lavender'?const Color(0xFFFAF5FF):theme=='sunset'?const Color(0xFFFFF0D3):const Color(0xFFFFF6DF);
+ c.drawRect(const Rect.fromLTWH(0,0,400,320),p..shader=LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[skyColor,const Color(0xFFFFF8E6)]).createShader(const Rect.fromLTWH(0,0,400,320)));p.shader=null;
  c.drawCircle(const Offset(340,49),25,p..color=const Color(0xFFFFDA7D));
  for(final pos in const [Offset(38,50),Offset(259,27)]) {c.drawOval(Rect.fromCenter(center:pos,width:60,height:20),p..color=Colors.white.withValues(alpha:.8));c.drawCircle(pos+const Offset(0,-7),14,p);}
  c.drawOval(const Rect.fromLTWH(-55,239,520,160),p..color=const Color(0xFFBEE3C6));
  c.drawOval(const Rect.fromLTWH(73,278,260,24),p..color=const Color(0xFF518879).withValues(alpha:.12));
  final house=RRect.fromRectAndRadius(const Rect.fromLTWH(92,107,216,173),const Radius.circular(14));
- c.drawShadow(Path()..addRRect(house),const Color(0xFF6B8779),8,false);c.drawRRect(house,p..color=const Color(0xFFFFF6DF));
+ c.drawShadow(Path()..addRRect(house),const Color(0xFF6B8779),8,false);c.drawRRect(house,p..color=wallColor);
  c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(92,252,216,28),const Radius.circular(8)),p..color=const Color(0xFFF0DAB0));
  final roof=Path()..moveTo(77,111)..lineTo(107,78)..quadraticBezierTo(200,62,293,78)..lineTo(323,111)..close();
- c.drawPath(roof,p..color=const Color(0xFF79BAAB));
+ c.drawPath(roof,p..color=roofColor);
  c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(145,87,110,29),const Radius.circular(10)),p..color=const Color(0xFFFFFCF1));
  final title=TextPainter(text:const TextSpan(text:'ToyTown',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800,color:Color(0xFF42796E))),textDirection:TextDirection.ltr)..layout();title.paint(c,Offset(200-title.width/2,91));
  // Display window with small toy blocks, and a sunlit doorway.
@@ -151,5 +164,5 @@ class _ShopPainter extends CustomPainter {
  c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(216,277,83,7),const Radius.circular(3)),p..color=const Color(0xFFF6E7CC));
  }
  @override
- bool shouldRepaint(covariant _ShopPainter old)=>old.balloons!=balloons||old.flowers!=flowers||old.awning!=awning||old.t!=t;
+ bool shouldRepaint(covariant _ShopPainter old)=>old.balloons!=balloons||old.flowers!=flowers||old.awning!=awning||old.theme!=theme||old.t!=t;
 }

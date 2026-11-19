@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'world_art.dart';
+import 'daily_pet_tasks.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
@@ -31,6 +32,9 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   bool decorated = false, flowers = false, awning = false;
   String petKind = 'dog', petName = 'Дружок', petOutfit = 'none';
   bool petHat = false, petBow = false;
+  Map<String, bool> dailyTasks = {};
+  String shopTheme = 'mint', lastActivity = 'stroke';
+  int reaction = 0;
 
   bool get online => widget.client?.auth.currentUser != null;
 
@@ -70,6 +74,10 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   }
 
   void applyProgress(Map<String, dynamic> data) {
+    if (data['dailyTasks'] is Map) {
+      dailyTasks = Map<String, bool>.from(data['dailyTasks'] as Map);
+    }
+    if (data['shopTheme'] is String) shopTheme = data['shopTheme'] as String;
     stars = (data['stars'] as num?)?.toInt() ?? 0;
     careCount = (data['careCount'] as num?)?.toInt() ?? 0;
     lastCareDay = (data['lastCareDay'] as num?)?.toInt();
@@ -95,13 +103,14 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
       ready = false; saving = false; error = null; legacyProgress = null;
       stars = 0; careCount = 0; lastCareDay = null; decorated = false;
       familyId = null; cloudStored = false;
+      dailyTasks = {}; shopTheme = 'mint'; lastActivity = 'stroke'; reaction = 0;
       flowers = false; awning = false; petKind = 'dog'; petName = 'Дружок'; petHat = false; petBow = false; petOutfit = 'none';
     });
     try {
       Map<String, dynamic> data;
       Map<String, dynamic>? local;
       if (user != null) {
-        data = Map<String, dynamic>.from(await widget.client!.rpc('family_world_action'));
+        data = Map<String, dynamic>.from(await widget.client!.rpc('daily_family_world'));
         final owner = await storage.getString(ownerKey);
         if (data['stored'] != true && (owner == null || owner == data['familyId'])) {
           final raw = await storage.getString(progressKey);
@@ -230,6 +239,56 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
     }
   }
 
+  Future<void> dailyAction(String action) async {
+    if (!ready || saving || !online || legacyProgress != null || familyId == null) return;
+    final ticket = generation;
+    final user = widget.client!.auth.currentUser!.id;
+    final target = familyId!;
+    setState(() { saving = true; error = null; });
+    try {
+      final data = Map<String, dynamic>.from(await widget.client!.rpc('daily_family_world', params: {
+        'target_family': target, 'action': action,
+      }));
+      if (!current(ticket, user)) return;
+      setState(() {
+        applyProgress(data);
+        if (data['rewarded'] == true) { lastActivity = action; reaction++; }
+      });
+      if (['feed', 'play', 'brush'].contains(action)) {
+        final message = data['rewarded'] == true
+          ? '${action == 'feed' ? 'Друг смачно поїв' : action == 'play' ? 'Весела гра завершена' : 'Друг тепер причепурений'} · +1 ⭐'
+          : 'Це завдання вже виконано сьогодні ♡';
+        ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (_) {
+      if (current(ticket, user)) setState(() => error = 'Не вдалося зберегти дію. Перевірте інтернет та оновіть прогрес.');
+    } finally {
+      if (current(ticket, user)) setState(() => saving = false);
+    }
+  }
+
+  Widget dailyAdventures() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    DailyPetTasks(completed: dailyTasks,
+      enabled: ready && !saving && online && familyId != null && legacyProgress == null,
+      onAction: dailyAction),
+    if (!online) TextButton(onPressed: widget.openParent,
+      child: const Text('Увійти, щоб виконувати завдання та отримувати зірочки')),
+  ]);
+
+  Widget shopThemes() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    const SizedBox(height: 16),
+    Text('Кольори крамнички', style: Theme.of(context).textTheme.titleLarge),
+    const Text('Три безкоштовні оформлення'),
+    const SizedBox(height: 8),
+    Wrap(spacing: 8, runSpacing: 8, children: [
+      for (final theme in const [('mint', 'М’ятна'), ('lavender', 'Лавандова'), ('sunset', 'Сонячна')])
+        ChoiceChip(label: Text(theme.$2), selected: shopTheme == theme.$1,
+          onSelected: ready && !saving && online && legacyProgress == null && familyId != null
+            ? (_) => dailyAction('theme_${theme.$1}') : null),
+    ]),
+    if (!online) const Text('Увійдіть у родину, щоб обрати й зберегти оформлення.'),
+  ]);
+
   Widget wardrobe() {
     final enabled=ready&&!saving&&online&&legacyProgress==null;
     return Container(margin:const EdgeInsets.symmetric(vertical:16),padding:const EdgeInsets.all(16),
@@ -296,14 +355,14 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
             ...(tab == 0 ? [
             Text('Містечко іграшок', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 16),
-            ShopScene(balloons:decorated,flowers:flowers,awning:awning,onTap:widget.openListings),
+            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,onTap:widget.openListings),
             const SizedBox(height:12),
             FilledButton.tonal(onPressed: widget.openListings, child: const Text('🧸 Знайти іграшки')),
             FilledButton.tonal(onPressed: () => setState(() => tab = 1), child: const Text('🐾 Відвідати улюбленця')),
             TextButton(onPressed: widget.openParent, child: const Text('Кабінет батьків')),
           ] : tab == 1 ? [
             Text('Мій улюбленець', style: Theme.of(context).textTheme.headlineMedium),
-            PetScene(key:ValueKey(petKind),kind:petKind,name:petName,grown:careCount>=3,hat:petHat,bow:petBow,outfit:petOutfit),
+            PetScene(key:ValueKey(petKind),kind:petKind,name:petName,grown:careCount>=3,hat:petHat,bow:petBow,outfit:petOutfit,activity:lastActivity,reaction:reaction),
             const SizedBox(height:12),
             Text(petName, style: Theme.of(context).textTheme.headlineSmall),
             if (!online) const Text('Увійдіть у родину, щоб обрати друга й дати йому ім’я.'),
@@ -314,6 +373,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
             ]),
             TextButton.icon(onPressed: !ready || saving || !online || legacyProgress != null ? null : renamePet,
               icon: const Icon(Icons.edit_outlined), label: const Text('Змінити ім’я')),
+            dailyAdventures(),
             wardrobe(),
             Text(careCount >= 3 ? 'Улюбленець підріс!' : 'Догляд до дорослішання: $careCount із 3 днів'),
             FilledButton(
@@ -323,8 +383,10 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
           ] : [
             Text('Моя крамничка', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height:12),
-            ShopScene(balloons:decorated,flowers:flowers,awning:awning,onTap:widget.openListings),
+            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,onTap:widget.openListings),
             const SizedBox(height:12),
+            shopThemes(),
+            const SizedBox(height: 12),
             const Text('Твоя крамничка — місце нових знайомств та іграшок. Додай їй власний настрій!',style:TextStyle(color:Color(0xFF587E73))),
             if (online) ...[
               const SizedBox(height: 12),
