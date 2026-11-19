@@ -3,6 +3,7 @@ import 'dart:async';
 import 'world_art.dart';
 import 'daily_pet_tasks.dart';
 import 'pet_memory_game.dart';
+import 'town_village.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   static const progressKey = 'toytown.world.progress';
   static const ownerKey = 'toytown.world.legacyFamily';
   final storage = SharedPreferencesAsync();
+  final worldScroll = ScrollController();
   StreamSubscription<AuthState>? authSubscription;
   bool ready = false, saving = false, canCare = true, cloudStored = false;
   String? error, familyId, accountId;
@@ -67,6 +69,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     authSubscription?.cancel();
+    worldScroll.dispose();
     super.dispose();
   }
 
@@ -369,6 +372,12 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
     ),
   );
 
+  void showTab(int index) {
+    if (index == tab) return;
+    setState(() => tab = index);
+    if (worldScroll.hasClients) worldScroll.jumpTo(0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -376,6 +385,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
       appBar: AppBar(backgroundColor:const Color(0xFFFBF6EE),title: Text('ToyTown · ⭐ $stars'), actions: [IconButton(tooltip: 'Оновити прогрес', onPressed: saving ? null : loadProgress, icon: const Icon(Icons.refresh))]),
       body: SafeArea(
         child: ListView(
+          controller: worldScroll,
           padding: const EdgeInsets.all(20),
           children: [
             Text(online ? (ready ? (cloudStored ? 'Прогрес родини збережено в акаунті' : 'Родину підключено. Новий прогрес зберігатиметься в акаунті.') : 'Завантаження прогресу родини…') : 'Гостьовий прогрес зберігається лише на цьому пристрої.'),
@@ -391,10 +401,11 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
             ...(tab == 0 ? [
             Text('Містечко іграшок', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 16),
-            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,front:shopFront,onTap:widget.openListings),
-            const SizedBox(height:12),
-            FilledButton.tonal(onPressed: widget.openListings, child: const Text('🧸 Знайти іграшки')),
-            FilledButton.tonal(onPressed: () => setState(() => tab = 1), child: const Text('🐾 Відвідати улюбленця')),
+            TownVillage(openToys: widget.openListings, openShop: () => showTab(2),
+              openPet: () => showTab(1), openGames: ready && !saving && !gameOpen ? playMemoryGame : null,
+              theme: shopTheme, front: shopFront, balloons: decorated, flowers: flowers,
+              awning: awning, petName: petName),
+            const SizedBox(height: 12),
             TextButton(onPressed: widget.openParent, child: const Text('Кабінет батьків')),
           ] : tab == 1 ? [
             Text('Мій улюбленець', style: Theme.of(context).textTheme.headlineMedium),
@@ -441,7 +452,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
-        onDestinationSelected: (index) => setState(() => tab = index),
+        onDestinationSelected: showTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Містечко'),
           NavigationDestination(icon: Icon(Icons.pets), label: 'Улюбленець'),
