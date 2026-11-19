@@ -10,13 +10,14 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(400, 400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final pictures = <List<int>>[];
-    for (final theme in ['mint', 'lavender', 'sunset']) {
+    for (final choice in [for (final theme in ['mint', 'lavender', 'sunset']) for (final front in ['classic', 'stars', 'clouds']) (theme, front)]) {
+      final theme = choice.$1; final front = choice.$2;
       final key = GlobalKey();
       await tester.pumpWidget(MaterialApp(
         builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(
           disableAnimations: true), child: child!),
         home: Scaffold(body: RepaintBoundary(key: key, child: ShopScene(
-          theme: theme, balloons: true, flowers: true, awning: true))),
+          theme: theme, front: front, balloons: true, flowers: true, awning: true))),
       ));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -27,12 +28,13 @@ void main() {
         final data = bytes!.buffer.asUint8List();
         pictures.add(data);
         await Directory('build/previews').create(recursive: true);
-        await File('build/previews/shop-$theme.png').writeAsBytes(data);
+        await File('build/previews/shop-$theme-$front.png').writeAsBytes(data);
         image.dispose();
       });
     }
     expect(pictures[0], isNot(orderedEquals(pictures[1])));
     expect(pictures[1], isNot(orderedEquals(pictures[2])));
+    expect(pictures[0], isNot(orderedEquals(pictures[3])));
   });
 
   testWidgets('new pet reactions respect reduced motion', (tester) async {

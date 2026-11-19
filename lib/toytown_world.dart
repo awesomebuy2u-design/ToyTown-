@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'world_art.dart';
 import 'daily_pet_tasks.dart';
+import 'pet_memory_game.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
@@ -33,7 +34,8 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   String petKind = 'dog', petName = 'Дружок', petOutfit = 'none';
   bool petHat = false, petBow = false;
   Map<String, bool> dailyTasks = {};
-  String shopTheme = 'mint', lastActivity = 'stroke';
+  String shopTheme = 'mint', shopFront = 'classic', lastActivity = 'stroke';
+  bool gameOpen = false;
   int reaction = 0;
 
   bool get online => widget.client?.auth.currentUser != null;
@@ -70,13 +72,14 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !saving) loadProgress();
+    if (state == AppLifecycleState.resumed && !saving && !gameOpen) loadProgress();
   }
 
   void applyProgress(Map<String, dynamic> data) {
     if (data['dailyTasks'] is Map) {
       dailyTasks = Map<String, bool>.from(data['dailyTasks'] as Map);
     }
+    if (data['shopFront'] is String) shopFront = data['shopFront'] as String;
     if (data['shopTheme'] is String) shopTheme = data['shopTheme'] as String;
     stars = (data['stars'] as num?)?.toInt() ?? 0;
     careCount = (data['careCount'] as num?)?.toInt() ?? 0;
@@ -103,7 +106,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
       ready = false; saving = false; error = null; legacyProgress = null;
       stars = 0; careCount = 0; lastCareDay = null; decorated = false;
       familyId = null; cloudStored = false;
-      dailyTasks = {}; shopTheme = 'mint'; lastActivity = 'stroke'; reaction = 0;
+      dailyTasks = {}; shopTheme = 'mint'; shopFront = 'classic'; lastActivity = 'stroke'; reaction = 0;
       flowers = false; awning = false; petKind = 'dog'; petName = 'Дружок'; petHat = false; petBow = false; petOutfit = 'none';
     });
     try {
@@ -267,10 +270,34 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
     }
   }
 
+  Future<void> playMemoryGame() async {
+    if (!ready || saving || gameOpen) return;
+    final ticket = generation;
+    final user = widget.client?.auth.currentUser?.id;
+    setState(() => gameOpen = true);
+    try {
+      final won = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) =>
+        PetMemoryGame(petName: petName, petKind: petKind,
+          canEarnReward: online && legacyProgress == null && familyId != null && dailyTasks['play'] != true)));
+      if (won == true && current(ticket, user) && online) await dailyAction('play');
+    } finally {
+      if (mounted) setState(() => gameOpen = false);
+    }
+  }
+
+  Future<void> handleDailyTask(String action) async {
+    if (action == 'play') { await playMemoryGame(); }
+    else { await dailyAction(action); }
+  }
+
   Widget dailyAdventures() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     DailyPetTasks(completed: dailyTasks,
       enabled: ready && !saving && online && familyId != null && legacyProgress == null,
-      onAction: dailyAction),
+      onAction: handleDailyTask),
+    FilledButton.tonalIcon(
+      onPressed: ready && !saving && !gameOpen ? playMemoryGame : null,
+      icon: const Icon(Icons.extension_rounded), label: const Text('Зіграти у «Знайди пару»')),
+    const Text('Повторні ігри доступні завжди. Зірочка за гру — раз на день.'),
     if (!online) TextButton(onPressed: widget.openParent,
       child: const Text('Увійти, щоб виконувати завдання та отримувати зірочки')),
   ]);
@@ -285,6 +312,15 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
         ChoiceChip(label: Text(theme.$2), selected: shopTheme == theme.$1,
           onSelected: ready && !saving && online && legacyProgress == null && familyId != null
             ? (_) => dailyAction('theme_${theme.$1}') : null),
+    ]),
+    const SizedBox(height: 16),
+    Text('Вивіска та вітрина', style: Theme.of(context).textTheme.titleLarge),
+    const Text('Безкоштовні набори декору'),
+    Wrap(spacing: 8, runSpacing: 8, children: [
+      for (final front in const [('classic', 'Класична'), ('stars', 'Зоряна'), ('clouds', 'Хмаринки')])
+        ChoiceChip(label: Text(front.$2), selected: shopFront == front.$1,
+          onSelected: ready && !saving && online && legacyProgress == null && familyId != null
+            ? (_) => dailyAction('front_${front.$1}') : null),
     ]),
     if (!online) const Text('Увійдіть у родину, щоб обрати й зберегти оформлення.'),
   ]);
@@ -355,7 +391,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
             ...(tab == 0 ? [
             Text('Містечко іграшок', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 16),
-            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,onTap:widget.openListings),
+            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,front:shopFront,onTap:widget.openListings),
             const SizedBox(height:12),
             FilledButton.tonal(onPressed: widget.openListings, child: const Text('🧸 Знайти іграшки')),
             FilledButton.tonal(onPressed: () => setState(() => tab = 1), child: const Text('🐾 Відвідати улюбленця')),
@@ -383,7 +419,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
           ] : [
             Text('Моя крамничка', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height:12),
-            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,onTap:widget.openListings),
+            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,front:shopFront,onTap:widget.openListings),
             const SizedBox(height:12),
             shopThemes(),
             const SizedBox(height: 12),

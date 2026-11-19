@@ -29,6 +29,16 @@ begin
  result := public.daily_family_world('theme_lavender',f);
  result := public.daily_family_world('read',f);
  if result->>'shopTheme'<>'lavender' or (result->>'stars')::integer<>before_stars+4 then raise exception 'Theme persistence or free price failed'; end if;
+ -- Free front sets persist without changing balances or purchased decorations.
+ result := public.daily_family_world('front_stars',f);
+ result := public.daily_family_world('read',f);
+ if result->>'shopFront'<>'stars' or (result->>'stars')::integer<>before_stars+4 then raise exception 'Front persistence or price failed'; end if;
+ result := public.daily_family_world('front_clouds',f);
+ if result->>'shopTheme'<>'lavender' or result->'dailyTasks'->>'play'<>'true' then raise exception 'Front reset unrelated progress'; end if;
+ rejected := false;
+ begin perform public.daily_family_world('front_invalid',f);
+ exception when others then if sqlerrm='Unknown daily action' then rejected:=true; else raise; end if; end;
+ if not rejected then raise exception 'Invalid front accepted'; end if;
  -- Old clients can still care and buy balloons with the new consistency constraint.
  update public.family_world_progress set last_care_day=null where family_id=f;
  result := public.family_world_action('care',f);

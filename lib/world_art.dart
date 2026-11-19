@@ -109,9 +109,9 @@ void _star(Canvas c,Offset center,double r,Color color) {
 }
 
 class ShopScene extends StatefulWidget {
- const ShopScene({super.key,required this.balloons,required this.flowers,required this.awning,this.onTap,this.theme='mint'});
+ const ShopScene({super.key,required this.balloons,required this.flowers,required this.awning,this.onTap,this.theme='mint',this.front='classic'});
  final bool balloons,flowers,awning;
- final String theme;
+ final String theme,front;
  final VoidCallback? onTap;
  @override
  State<ShopScene> createState()=>_ShopSceneState();
@@ -123,13 +123,13 @@ class _ShopSceneState extends State<ShopScene> with SingleTickerProviderStateMix
  @override
  void dispose(){motion.dispose();super.dispose();}
  @override
- Widget build(BuildContext context)=>Semantics(label:'${widget.theme == 'lavender' ? 'Лавандова' : widget.theme == 'sunset' ? 'Сонячна' : 'М’ятна'} іграшкова крамничка${widget.balloons?', з кульками':''}${widget.flowers?', з квітами':''}${widget.awning?', з барвистим навісом':''}',button:widget.onTap!=null,
+ Widget build(BuildContext context)=>Semantics(label:'${widget.theme == 'lavender' ? 'Лавандова' : widget.theme == 'sunset' ? 'Сонячна' : 'М’ятна'} іграшкова крамничка${widget.front == 'stars' ? ', зоряна вітрина' : widget.front == 'clouds' ? ', вітрина з хмаринками' : ''}${widget.balloons?', з кульками':''}${widget.flowers?', з квітами':''}${widget.awning?', з барвистим навісом':''}',button:widget.onTap!=null,
  child:GestureDetector(onTap:widget.onTap,child:AspectRatio(aspectRatio:1.25,child:ClipRRect(borderRadius:BorderRadius.circular(30),
- child:AnimatedBuilder(animation:motion,builder:(context,_)=>CustomPaint(painter:_ShopPainter(balloons:widget.balloons,flowers:widget.flowers,awning:widget.awning,theme:widget.theme,t:MediaQuery.disableAnimationsOf(context)?0:motion.value)))))));
+ child:AnimatedBuilder(animation:motion,builder:(context,_)=>CustomPaint(painter:_ShopPainter(balloons:widget.balloons,flowers:widget.flowers,awning:widget.awning,theme:widget.theme,front:widget.front,t:MediaQuery.disableAnimationsOf(context)?0:motion.value)))))));
 }
 class _ShopPainter extends CustomPainter {
- _ShopPainter({required this.balloons,required this.flowers,required this.awning,required this.theme,required this.t});
- final bool balloons,flowers,awning;final String theme;final double t;
+ _ShopPainter({required this.balloons,required this.flowers,required this.awning,required this.theme,required this.front,required this.t});
+ final bool balloons,flowers,awning;final String theme,front;final double t;
  @override
  void paint(Canvas c,Size s){
  c.scale(s.width/400,s.height/320);
@@ -157,6 +157,27 @@ class _ShopPainter extends CustomPainter {
  c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(235,160,44,69),const Radius.circular(9)),p..color=const Color(0xFFD9F0EA));
  c.drawCircle(const Offset(275,239),3,p..color=const Color(0xFFFFDE8A));
  for(var i=0;i<3;i++){c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(123.0+i*23,211.0-i%2*14,19,18),const Radius.circular(3)),p..color=[const Color(0xFFEA9C91),const Color(0xFFFFD16F),const Color(0xFF9EC2D8)][i]);}
+ // Free front sets change the sign, window display and hanging decorations.
+ if(front=='stars') {
+   for(final x in [84.0,316.0]) {
+     c.drawLine(Offset(x,112),Offset(x,151),p..color=const Color(0xFFD1AF64)..strokeWidth=1.5);
+     _star(c,Offset(x,151),8,const Color(0xFFFFD36D));
+   }
+   _star(c,const Offset(130,102),8,const Color(0xFFFFD36D));
+   _star(c,const Offset(270,102),8,const Color(0xFFFFD36D));
+   for(var i=0;i<3;i++) _star(c,Offset(130.0+i*28,184),8,[const Color(0xFFEAA8BC),const Color(0xFFFFCE6A),const Color(0xFFA6B8E2)][i]);
+ } else if(front=='clouds') {
+   for(final pos in const [Offset(130,102),Offset(270,102),Offset(133,184),Offset(182,184)]) {
+     p.color=Colors.white;
+     c.drawOval(Rect.fromCenter(center:pos,width:30,height:12),p);
+     c.drawCircle(pos+const Offset(-4,-5),7,p);
+     c.drawCircle(pos+const Offset(5,-3),6,p);
+   }
+   for(final x in [84.0,316.0]) {
+     c.drawLine(Offset(x,112),Offset(x,153),p..color=const Color(0xFF90B9CC)..strokeWidth=1.5);
+     c.drawCircle(Offset(x,153),5,p..color=const Color(0xFFA8CFDD));
+   }
+ }
  // A striped canopy makes an actual visible change when purchased.
  for(var i=0;i<8;i++){final x=99+i*25.0;final color=awning?(i.isEven?const Color(0xFFEF9E90):const Color(0xFFFFF5DC)):(i.isEven?const Color(0xFF88C7B7):const Color(0xFFE6F2E8));c.drawRect(Rect.fromLTWH(x,121,25,23),p..color=color);c.drawArc(Rect.fromLTWH(x,134,25,19),0,math.pi,true,p);}
  if(flowers){for(final x in [106.0,299.0]){c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x-12,262,24,20),const Radius.circular(4)),p..color=const Color(0xFFCE8B70));for(var j=0;j<3;j++){final xx=x-9+j*9;c.drawLine(Offset(xx,265),Offset(xx,246.0-j%2*6),p..color=const Color(0xFF5B9D78)..strokeWidth=2);for(var k=0;k<5;k++){final a=k*2*math.pi/5;c.drawCircle(Offset(xx+math.cos(a)*4,246.0-j%2*6+math.sin(a)*4),3.6,p..color=j.isEven?const Color(0xFFED9BAE):const Color(0xFFFFD27A));}c.drawCircle(Offset(xx,246.0-j%2*6),2,p..color=const Color(0xFFFFF3C8));}}}
@@ -164,5 +185,5 @@ class _ShopPainter extends CustomPainter {
  c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(216,277,83,7),const Radius.circular(3)),p..color=const Color(0xFFF6E7CC));
  }
  @override
- bool shouldRepaint(covariant _ShopPainter old)=>old.balloons!=balloons||old.flowers!=flowers||old.awning!=awning||old.theme!=theme||old.t!=t;
+ bool shouldRepaint(covariant _ShopPainter old)=>old.balloons!=balloons||old.flowers!=flowers||old.awning!=awning||old.theme!=theme||old.front!=front||old.t!=t;
 }
