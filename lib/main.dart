@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'toytown_world.dart';
+import 'listing.dart';
+import 'family_shops.dart';
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -40,9 +42,9 @@ class ToyTownApp extends StatelessWidget {
 class WorldScreen extends StatelessWidget {
   const WorldScreen({super.key});
 
-  void openOnline(BuildContext context, int tab) {
+  void openOnline(BuildContext context, int tab, {bool shops = false}) {
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => hasBackend ? AuthGate(initialTab: tab) : const SetupScreen(),
+      builder: (_) => hasBackend ? AuthGate(initialTab: tab, shops: shops) : const SetupScreen(),
     ));
   }
 
@@ -51,6 +53,7 @@ class WorldScreen extends StatelessWidget {
     client: db,
     openListings: () => openOnline(context, 0),
     openParent: () => openOnline(context, 4),
+    openShops: () => openOnline(context, 0, shops: true),
   );
 }
 
@@ -75,14 +78,17 @@ class SetupScreen extends StatelessWidget {
 }
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key, this.initialTab = 0});
+  const AuthGate({super.key, this.initialTab = 0, this.shops = false});
   final int initialTab;
+  final bool shops;
   @override
   Widget build(BuildContext context) => StreamBuilder<AuthState>(
     stream: db!.auth.onAuthStateChange,
     builder: (context, snapshot) {
       final session = db!.auth.currentSession;
-      return session == null ? const AuthScreen() : HomeShell(initialTab: initialTab);
+      return session == null ? const AuthScreen() : shops
+        ? FamilyShopsScreen(repository: SupabaseFamilyShopsRepository(db!), listingBuilder: (item) => ListingCard(item: item))
+        : HomeShell(initialTab: initialTab);
     },
   );
 }
@@ -166,17 +172,6 @@ class _HomeShellState extends State<HomeShell> {
   );
 }
 
-class Listing {
-  final String id, title, description, category, condition, dealType, city, status;
-  final int? price;
-  final String? photoPath;
-  Listing.fromMap(Map<String, dynamic> m)
-    : id = m['id'].toString(), title = m['title'] ?? '', description = m['description'] ?? '',
-      category = m['category'] ?? 'Інше', condition = m['condition'] ?? 'used',
-      dealType = m['deal_type'] ?? 'gift', city = m['city'] ?? '',
-      status = m['status'] ?? 'pending', price = m['price'] as int?,
-      photoPath = m['photo_path'] as String?;
-}
 
 Future<List<Listing>> fetchListings({bool mine = false}) async {
   final user = db!.auth.currentUser!;
@@ -239,6 +234,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
       }).toList();
       return Column(children: [
         Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), child: Column(children: [
+          Align(alignment: Alignment.centerRight, child: TextButton.icon(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FamilyShopsScreen(
+              repository: SupabaseFamilyShopsRepository(db!), listingBuilder: (item) => ListingCard(item: item)))),
+            icon: const Icon(Icons.holiday_village_rounded), label: const Text('Крамнички родин'))),
           Align(alignment: Alignment.centerRight, child: TextButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedListingsScreen())),
             icon: const Icon(Icons.bookmark_outline), label: const Text('Збережені оголошення'))),

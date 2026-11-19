@@ -10,10 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ToyTownWorld extends StatefulWidget {
-  const ToyTownWorld({super.key, required this.openListings, required this.openParent, this.client});
+  const ToyTownWorld({super.key, required this.openListings, required this.openParent, this.openShops, this.client});
   final SupabaseClient? client;
   final VoidCallback openListings;
   final VoidCallback openParent;
+  final VoidCallback? openShops;
 
   @override
   State<ToyTownWorld> createState() => _ToyTownWorldState();
@@ -406,6 +407,9 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
               theme: shopTheme, front: shopFront, balloons: decorated, flowers: flowers,
               awning: awning, petName: petName),
             const SizedBox(height: 12),
+            if (widget.openShops != null) FilledButton.tonalIcon(
+              onPressed: widget.openShops, icon: const Icon(Icons.holiday_village_rounded),
+              label: const Text('Крамнички інших родин')),
             TextButton(onPressed: widget.openParent, child: const Text('Кабінет батьків')),
           ] : tab == 1 ? [
             Text('Мій улюбленець', style: Theme.of(context).textTheme.headlineMedium),

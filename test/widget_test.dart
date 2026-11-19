@@ -27,9 +27,9 @@ void main() {
   });
 
   testWidgets('village connects catalog, shop, pet and game and resets page scroll', (tester) async {
-    var catalogVisits = 0;
+    var catalogVisits = 0, shopVisits = 0;
     await tester.pumpWidget(MaterialApp(home: ToyTownWorld(
-      openListings: () => catalogVisits++, openParent: () {})));
+      openListings: () => catalogVisits++, openParent: () {}, openShops: () => shopVisits++)));
     await tester.pumpAndSettle();
     Future<void> visit(String destination) async {
       final target = find.byKey(ValueKey('village-door-$destination'));
@@ -42,6 +42,10 @@ void main() {
       await tester.tap(find.byType(NavigationDestination).first);
       await tester.pumpAndSettle();
     }
+    await tester.scrollUntilVisible(find.text('Крамнички інших родин'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Крамнички інших родин'));
+    await tester.pumpAndSettle();
+    expect(shopVisits, 1);
     await visit('toys');
     expect(catalogVisits, 1);
     await visit('shop');
