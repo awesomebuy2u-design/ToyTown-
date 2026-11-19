@@ -35,13 +35,16 @@ Widget screen(FakeShops repo, {double scale = 1}) => MaterialApp(
 Future<void> show(WidgetTester tester, Finder finder) async {
   await tester.scrollUntilVisible(finder, 500, scrollable: find.byType(Scrollable).first, maxScrolls: 60);
   await tester.pumpAndSettle();
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  expect(finder.hitTestable(), findsOneWidget);
 }
 
 void main() {
   testWidgets('a real storefront opens its own listing and existing details screen', (tester) async {
-    final repo = FakeShops()
-      ..browseHandler = (_, __) async => [shop('A'), shop('B')]
-      ..listingsHandler = (id, _) async => [toy('from-$id')];
+    final repo = FakeShops();
+    repo.browseHandler = (_, __) async => [shop('A'), shop('B')];
+    repo.listingsHandler = (id, _) async => [toy('from-$id')];
     await tester.pumpWidget(screen(repo));
     await tester.pumpAndSettle();
     final visit = find.byKey(const ValueKey('visit-shop-B'));

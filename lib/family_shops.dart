@@ -89,7 +89,7 @@ class _FamilyShopsScreenState extends State<FamilyShopsScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Крамнички родин')),
+    appBar: AppBar(title: const Text('Крамнички родин', maxLines: 1, overflow: TextOverflow.ellipsis)),
     body: SafeArea(child: RefreshIndicator(onRefresh: () => load(), child: ListView(
       physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
         const Text('Відвідуй крамнички та знаходь нові іграшки. Тут лише підтверджені оголошення.'),
@@ -163,7 +163,7 @@ class _FamilyShopScreenState extends State<FamilyShopScreen> {
   @override
   Widget build(BuildContext context) {
     final shop = widget.shop;
-    return Scaffold(appBar: AppBar(title: Text(shop.name)), body: SafeArea(
+    return Scaffold(appBar: AppBar(title: Text(shop.name, maxLines: 1, overflow: TextOverflow.ellipsis)), body: SafeArea(
       child: RefreshIndicator(onRefresh: () => load(), child: ListView(
         physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
           Text(shop.cityLabel),

@@ -49,7 +49,7 @@ void main() {
     await visit('toys');
     expect(catalogVisits, 1);
     await visit('shop');
-    expect(find.text('Моя крамничка'), findsOneWidget);
+    expect(find.byKey(const ValueKey('world-shop-heading')), findsOneWidget);
     await town();
     await visit('pet');
     expect(find.text('Мій улюбленець'), findsOneWidget);
@@ -60,10 +60,14 @@ void main() {
     await tester.pumpAndSettle();
     final directoryShop = find.byKey(const ValueKey('village-link-shop'));
     await tester.scrollUntilVisible(directoryShop, 200, scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(directoryShop);
+    await tester.pumpAndSettle();
+    expect(directoryShop.hitTestable(), findsOneWidget);
     await tester.tap(directoryShop);
     await tester.pumpAndSettle();
-    expect(find.text('Моя крамничка'), findsOneWidget);
-    expect(tester.getTopLeft(find.text('Моя крамничка')).dy, lessThan(300));
+    expect(find.byKey(const ValueKey('world-shop-heading')), findsOneWidget);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('world-shop-heading'))).dy, lessThan(300));
     expect(tester.takeException(), isNull);
   });
 

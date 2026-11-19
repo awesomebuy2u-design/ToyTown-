@@ -432,7 +432,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
               child: Text(!canCare ? 'Наступний догляд завтра' : 'Подбати про улюбленця · +3 ⭐'),
             ),
           ] : [
-            Text('Моя крамничка', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Моя крамничка', key: const ValueKey('world-shop-heading'), style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height:12),
             ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,front:shopFront,onTap:widget.openListings),
             const SizedBox(height:12),
