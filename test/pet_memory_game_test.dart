@@ -16,8 +16,17 @@ Future<void> openGame(WidgetTester tester, ValueChanged<bool?> result) async {
 String face(WidgetTester tester, int index) => tester.widget<Semantics>(
   find.byKey(ValueKey('memory-label-$index'))).properties.label!.split(': ').last;
 
+Future<void> showItem(WidgetTester tester, Finder finder) async {
+  if (finder.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(finder, 160, scrollable: find.byType(Scrollable).first);
+  } else {
+    await tester.ensureVisible(finder);
+  }
+  await tester.pump();
+}
+
 Future<void> flip(WidgetTester tester, int index) async {
-  await tester.ensureVisible(find.byKey(ValueKey('memory-card-$index')));
+  await showItem(tester, find.byKey(ValueKey('memory-card-$index')));
   await tester.tap(find.byKey(ValueKey('memory-card-$index')));
   await tester.pump();
 }
@@ -55,7 +64,7 @@ void main() {
     }
     expect(find.textContaining('Знайдено пар: 3 із 3'), findsOneWidget);
     expect(results, isEmpty);
-    await tester.ensureVisible(find.byKey(const ValueKey('memory-finish')));
+    await showItem(tester, find.byKey(const ValueKey('memory-finish')));
     await tester.tap(find.byKey(const ValueKey('memory-finish')));
     await tester.pumpAndSettle();
     expect(results, [true]);
@@ -80,7 +89,7 @@ void main() {
       data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2)), child: child!),
       home: const PetMemoryGame(petName: 'Дружок', canEarnReward: false)));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('memory-card-5')));
+    await showItem(tester, find.byKey(const ValueKey('memory-card-5')));
     await flip(tester, 5);
     expect(face(tester, 5), isNot('перевернути'));
     expect(tester.takeException(), isNull);
