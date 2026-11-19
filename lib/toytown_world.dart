@@ -24,7 +24,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   static const progressKey = 'toytown.world.progress';
   static const ownerKey = 'toytown.world.legacyFamily';
   final storage = SharedPreferencesAsync();
-  final worldScroll = ScrollController();
+  final worldScroll = ScrollController(keepScrollOffset: false);
   StreamSubscription<AuthState>? authSubscription;
   bool ready = false, saving = false, canCare = true, cloudStored = false;
   String? error, familyId, accountId;
@@ -375,7 +375,6 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   void showTab(int index) {
     if (index == tab) return;
     setState(() => tab = index);
-    if (worldScroll.hasClients) worldScroll.jumpTo(0);
   }
 
   @override
@@ -385,6 +384,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
       appBar: AppBar(backgroundColor:const Color(0xFFFBF6EE),title: Text('ToyTown · ⭐ $stars'), actions: [IconButton(tooltip: 'Оновити прогрес', onPressed: saving ? null : loadProgress, icon: const Icon(Icons.refresh))]),
       body: SafeArea(
         child: ListView(
+          key: ValueKey('world-tab-$tab'),
           controller: worldScroll,
           padding: const EdgeInsets.all(20),
           children: [
