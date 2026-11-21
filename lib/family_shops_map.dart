@@ -115,7 +115,8 @@ class _FamilyShopsMapScreenState extends State<FamilyShopsMapScreen> {
     final located = {for (final city in cities) ...city.shops.keys};
     return SafeArea(child: RefreshIndicator(
       onRefresh: () => load(refresh: true),
-      child: ListView(physics: const AlwaysScrollableScrollPhysics(),
+      child: ListView(key: const ValueKey('map-shop-list'),
+        physics: const AlwaysScrollableScrollPhysics(),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16), children: [
           Text('Крамнички на мапі України', style: Theme.of(context).textTheme.titleLarge),

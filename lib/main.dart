@@ -7,6 +7,7 @@ import 'toytown_world.dart';
 import 'listing.dart';
 import 'family_shops.dart';
 import 'family_shops_map.dart';
+import 'content_actions.dart';
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -178,7 +179,7 @@ Future<List<Listing>> fetchListings({bool mine = false}) async {
   if (mine) {
     final family = await db!.from('family_members').select('family_id').eq('user_id', user.id).maybeSingle();
     if (family == null) return [];
-    query = db!.from('listings').select().eq('family_id', family['family_id']);
+    query = db!.from('listings').select().eq('family_id', family['family_id']).isFilter('deleted_at', null);
   } else {
     query = db!.from('public_listings').select();
   }
@@ -204,7 +205,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     future = fetchListings();
   }
 
-  Future<void> refresh() async => setState(() => future = fetchListings());
+  Future<void> refresh() async => setState(() { future = fetchListings(); });
 
   @override
   void dispose() {
@@ -269,15 +270,26 @@ class _CatalogScreenState extends State<CatalogScreen> {
 }
 
 class MyShopScreen extends StatefulWidget {
-  const MyShopScreen({super.key});
+  const MyShopScreen({super.key, this.loadListings, this.deleteListing});
+  final Future<List<Listing>> Function()? loadListings;
+  final Future<void> Function(String)? deleteListing;
   @override
   State<MyShopScreen> createState() => _MyShopScreenState();
 }
 class _MyShopScreenState extends State<MyShopScreen> {
   late Future<List<Listing>> future;
+  Future<List<Listing>> load() => widget.loadListings?.call() ?? fetchListings(mine: true);
   @override
-  void initState() { super.initState(); future = fetchListings(mine: true); }
-  Future<void> refresh() async => setState(() => future = fetchListings(mine: true));
+  void initState() { super.initState(); future = load(); }
+  Future<void> refresh() async => setState(() { future = load(); });
+  Future<void> deleteListing(String id) async {
+    if (widget.deleteListing != null) {
+      await widget.deleteListing!(id);
+    } else {
+      await db!.rpc('delete_own_listing', params: {'target_listing': id});
+    }
+    if (mounted) await refresh();
+  }
   @override
   Widget build(BuildContext context) => FutureBuilder<List<Listing>>(
     future: future,
@@ -287,14 +299,19 @@ class _MyShopScreenState extends State<MyShopScreen> {
       return RefreshIndicator(onRefresh: refresh, child: snap.data!.isEmpty
         ? ListView(children: const [SizedBox(height: 120), EmptyState(icon: Icons.add_box_outlined, title: 'Ваша крамничка порожня', subtitle: 'Додайте першу іграшку — вона з’явиться після батьківського підтвердження.')])
         : ListView.separated(padding: const EdgeInsets.all(16), itemCount: snap.data!.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (_, i) => ListingCard(item: snap.data![i], showStatus: true)));
+          separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (_, i) {
+            final item = snap.data![i];
+            return ListingCard(key: ValueKey(item.id), item: item, showStatus: true,
+              onDelete: () => deleteListing(item.id));
+          }));
     },
   );
 }
 
 class ListingCard extends StatefulWidget {
   final Listing item; final bool showStatus;
-  const ListingCard({super.key, required this.item, this.showStatus = false});
+  final Future<void> Function()? onDelete;
+  const ListingCard({super.key, required this.item, this.showStatus = false, this.onDelete});
   @override
   State<ListingCard> createState() => _ListingCardState();
 }
@@ -342,6 +359,8 @@ class _ListingCardState extends State<ListingCard> {
         label: const Text('Переглянути оголошення'),
       ),
       if (!showStatus) Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>_startListingChat(context,item),icon:const Icon(Icons.chat_bubble_outline),label:const Text('Написати родині'))),
+      if (showStatus && widget.onDelete != null) ContentDeleteButton(
+        kind: DeletableContent.listing, onDelete: widget.onDelete!),
     ])));
   }
 }
@@ -364,7 +383,7 @@ class _SavedListingsScreenState extends State<SavedListingsScreen> {
     final listings = await db!.from('public_listings').select().inFilter('id', ids).order('created_at', ascending: false);
     return listings.map<Listing>((r) => Listing.fromMap(r)).toList();
   }
-  Future<void> refresh() async => setState(() => future = _load());
+  Future<void> refresh() async => setState(() { future = _load(); });
   @override
   Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Збережені оголошення')), body: FutureBuilder<List<Listing>>(
     future: future, builder: (context, snap) {
@@ -549,7 +568,7 @@ class _ModerationScreenState extends State<ModerationScreen> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(approve ? 'Оголошення опубліковано.' : 'Оголошення відхилено.')));
-      setState(() => future = loadPending());
+      setState(() { future = loadPending(); });
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не вдалося змінити статус: $e')));
     } finally { if (mounted) setState(() => busy = false); }
@@ -562,7 +581,7 @@ class _ModerationScreenState extends State<ModerationScreen> {
       if (snap.hasError) return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Помилка завантаження черги: ${snap.error}')));
       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
       if (snap.data!.isEmpty) return const EmptyState(icon: Icons.verified_user, title: 'Немає оголошень на перевірці', subtitle: 'Нові оголошення родини з’являться тут перед публікацією.');
-      return RefreshIndicator(onRefresh: () async => setState(() => future = loadPending()), child: ListView.separated(
+      return RefreshIndicator(onRefresh: () async => setState(() { future = loadPending(); }), child: ListView.separated(
         padding: const EdgeInsets.all(16), itemCount: snap.data!.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, i) {
@@ -723,13 +742,15 @@ class ConversationScreen extends StatefulWidget {
 }
 class _ConversationScreenState extends State<ConversationScreen> {
   final composer=TextEditingController();
+  final deletedMessageIds = <String>{};
   List<Map<String,dynamic>> messages=[];
   bool sending=false,loading=true;
   @override
   void initState(){super.initState();load();}
   Future<void> load() async {
     try { final rows=await db!.from('family_messages').select('id,sender_user_id,body,created_at').eq('conversation_id',widget.conversationId).order('created_at');
-      if(mounted)setState(()=>messages=List<Map<String,dynamic>>.from(rows));
+      if(mounted)setState(()=>messages=List<Map<String,dynamic>>.from(rows)
+        .where((message) => !deletedMessageIds.contains(message['id'].toString())).toList());
     } catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Помилка завантаження: $e')));}
     finally{if(mounted)setState(()=>loading=false);}
   }
@@ -755,12 +776,24 @@ class _ConversationScreenState extends State<ConversationScreen> {
     catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Не вдалося надіслати: $e')));}
     finally{if(mounted)setState(()=>sending=false);}
   }
+  Future<void> deleteMessage(String id) async {
+    await db!.rpc('delete_own_message', params: {'target_message': id});
+    if (mounted) setState(() {
+      deletedMessageIds.add(id);
+      messages.removeWhere((message) => message['id'].toString() == id);
+    });
+  }
   @override
   void dispose(){composer.dispose();super.dispose();}
   @override
   Widget build(BuildContext context){final myId=db!.auth.currentUser!.id;return Scaffold(
     appBar:AppBar(title:Text(widget.title,maxLines:1,overflow:TextOverflow.ellipsis),actions:[IconButton(tooltip:'Створити домовленість',icon:const Icon(Icons.handshake_outlined),onPressed:createAgreement),PopupMenuButton<String>(tooltip:'Домовленість',onSelected:(v){composer.text=v;},itemBuilder:(_)=>const [PopupMenuItem(value:'Пропоную обмінятися цією іграшкою. Чи цікава вам така пропозиція?',child:Text('Запропонувати обмін')),PopupMenuItem(value:'Чи можемо домовитися про дарування цієї іграшки?',child:Text('Запропонувати дарування')),PopupMenuItem(value:'Чи зручна вам зустріч у громадському місці? Не надсилайте домашню адресу.',child:Text('Узгодити безпечну передачу'))]),IconButton(tooltip:'Оновити',onPressed:load,icon:const Icon(Icons.refresh))]),
-    body:Column(children:[Expanded(child:loading?const Center(child:CircularProgressIndicator()):messages.isEmpty?const EmptyState(icon:Icons.chat_bubble_outline,title:'Почніть розмову',subtitle:'Домовляйтеся про іграшку лише як дорослі представники родин.'):ListView.builder(padding:const EdgeInsets.all(16),itemCount:messages.length,itemBuilder:(context,i){final m=messages[i];final mine=m['sender_user_id']==myId;return Align(alignment:mine?Alignment.centerRight:Alignment.centerLeft,child:Container(constraints:const BoxConstraints(maxWidth:320),margin:const EdgeInsets.only(bottom:10),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:mine?const Color(0xFFE8E5FF):Colors.white,borderRadius:BorderRadius.circular(16)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(m['body']??''),const SizedBox(height:4),Text(m['created_at'].toString().replaceFirst('T',' ').substring(0,16),style:const TextStyle(fontSize:10,color:Colors.black54))])));})),
+    body:Column(children:[Expanded(child:loading?const Center(child:CircularProgressIndicator()):messages.isEmpty?const EmptyState(icon:Icons.chat_bubble_outline,title:'Почніть розмову',subtitle:'Домовляйтеся про іграшку лише як дорослі представники родин.'):ListView.builder(padding:const EdgeInsets.all(16),itemCount:messages.length,itemBuilder:(context,i){
+      final m=messages[i]; final id=m['id'].toString();
+      return ConversationMessageBubble(key:ValueKey(id), body:m['body']??'',
+        createdAt:m['created_at'].toString(), mine:m['sender_user_id']==myId,
+        onDelete:()=>deleteMessage(id));
+    })),
     SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Row(children:[Expanded(child:TextField(controller:composer,minLines:1,maxLines:4,maxLength:1000,decoration:const InputDecoration(hintText:'Повідомлення…',counterText:'',border:OutlineInputBorder()))),const SizedBox(width:8),IconButton.filled(onPressed:sending?null:send,icon:const Icon(Icons.send))]))),
   ]));}
 }
@@ -778,7 +811,7 @@ class _AgreementsScreenState extends State<AgreementsScreen> {
     final rows = await db!.from('exchange_agreements').select('id,conversation_id,listing_id,proposer_family,receiver_family,created_by,status,note,proposer_confirmed_at,receiver_confirmed_at,created_at').order('created_at', ascending:false);
     return List<Map<String,dynamic>>.from(rows);
   }
-  Future<void> refresh() async => setState(() => future = loadAgreements());
+  Future<void> refresh() async => setState(() { future = loadAgreements(); });
   Future<void> act(String id, String rpc) async {
     final confirmed = await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:Text(rpc=='cancel_exchange_agreement'?'Скасувати домовленість?':rpc=='confirm_exchange_handover'?'Іграшку передано?':'Підтвердити дію?'),content:Text(rpc=='confirm_exchange_handover'?'Підтверджуйте лише фактичну передачу. Після підтвердження обома родинами оголошення зникне з каталогу.':'Зміна стане видимою іншій родині.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Назад')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Підтвердити'))]));
     if(confirmed!=true)return;
