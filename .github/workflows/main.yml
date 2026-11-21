@@ -2,6 +2,16 @@ name: Build ToyTown APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'assets/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'analysis_options.yaml'
+      - '.github/workflows/main.yml'
   push:
     branches:
       - main

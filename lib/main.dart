@@ -1,13 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'toytown_world.dart';
 import 'listing.dart';
 import 'family_shops.dart';
+import 'family_shops_map.dart';
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -801,18 +800,9 @@ class _AgreementsScreenState extends State<AgreementsScreen> {
 class MapScreen extends StatelessWidget {
   const MapScreen({super.key});
   @override
-  Widget build(BuildContext context)=>FlutterMap(
-    options: const MapOptions(initialCenter:LatLng(49.0,31.2),initialZoom:5.2,interactionOptions:InteractionOptions(flags:InteractiveFlag.all)),
-    children: [
-      TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName:'ua.toytown.app'),
-      MarkerLayer(markers: const [
-        Marker(point:LatLng(50.4501,30.5234),width:42,height:42,child:Icon(Icons.location_on,color:Color(0xFF6C63D9),size:38)),
-        Marker(point:LatLng(49.8397,24.0297),width:42,height:42,child:Icon(Icons.location_on,color:Color(0xFF6C63D9),size:38)),
-        Marker(point:LatLng(46.4825,30.7233),width:42,height:42,child:Icon(Icons.location_on,color:Color(0xFF6C63D9),size:38)),
-        Marker(point:LatLng(48.4647,35.0462),width:42,height:42,child:Icon(Icons.location_on,color:Color(0xFF6C63D9),size:38)),
-      ]),
-      const RichAttributionWidget(attributions:[TextSourceAttribution('OpenStreetMap contributors')]),
-    ],
+  Widget build(BuildContext context) => FamilyShopsMapScreen(
+    repository: SupabaseFamilyShopsRepository(db!),
+    listingBuilder: (item) => ListingCard(item: item),
   );
 }
 
