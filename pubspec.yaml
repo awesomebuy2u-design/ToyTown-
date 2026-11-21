@@ -1,7 +1,7 @@
 name: toytown
 description: ToyTown — безпечний простір для обміну дитячими іграшками під наглядом батьків.
 publish_to: 'none'
-version: 1.0.12+22
+version: 1.0.13+23
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -25,3 +25,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/pets/
+    - assets/places/ukraine.json
