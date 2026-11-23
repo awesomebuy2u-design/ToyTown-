@@ -86,9 +86,9 @@ class SupabaseShopShelvesRepository implements ShopShelvesRepository {
 }
 
 Color shelfWall(String theme) => switch (theme) {
-  'lavender' => const Color(0xFFEDE6FB),
-  'sunset' => const Color(0xFFFFECD4),
-  _ => const Color(0xFFDFF2EB),
+  'lavender' => const Color(0xFFF3EAFE),
+  'sunset' => const Color(0xFFFFF0D9),
+  _ => const Color(0xFFE8FAF1),
 };
 
 /// The shelves contain actual approved listings, or an explicitly labelled demo.
@@ -133,7 +133,25 @@ class ShelfCabinet extends StatelessWidget {
               tooltip: 'Переставити ${item.title}',
               onSelected: (shelf) => onMove?.call(item.id, shelf),
               itemBuilder: (_) => [
-                for (var shelf = 0; shelf < layout.shelfCount; shelf++)
+                const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE5A83C)),
+            const SizedBox(width: 6),
+            Text(
+              '${items.length} ${items.length == 1 ? 'іграшка' : 'іграшок'} на вітрині',
+              style: const TextStyle(
+                color: Color(0xFF6A567B),
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE5A83C)),
+          ],
+        ),
+        for (var shelf = 0; shelf < layout.shelfCount; shelf++)
                   PopupMenuItem(
                     value: shelf,
                     child: Text('Полиця №${shelf + 1}'),
@@ -164,9 +182,13 @@ class ShelfCabinet extends StatelessWidget {
     key: const ValueKey('toy-shelf-cabinet'),
     padding: const EdgeInsets.fromLTRB(12, 14, 12, 18),
     decoration: BoxDecoration(
-      color: shelfWall(theme),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Colors.white, shelfWall(theme), shelfWall(theme)],
+      ),
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: const Color(0xFFC99568), width: 7),
+      border: Border.all(color: const Color(0xFFD9A96F), width: 7),
       boxShadow: const [
         BoxShadow(
           color: Color(0x223E3022),
@@ -216,12 +238,16 @@ class ShelfCabinet extends StatelessWidget {
               key: ValueKey('toy-shelf-$shelf'),
               margin: const EdgeInsets.only(top: 14),
               decoration: BoxDecoration(
-                color: candidates.isEmpty
-                    ? Colors.white.withValues(alpha: .35)
-                    : const Color(0xFFB6DFCC),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: candidates.isEmpty
+                      ? [Colors.white.withValues(alpha: .9), const Color(0xFFFFF4DE)]
+                      : [const Color(0xFFD9F9E6), const Color(0xFFB6DFCC)],
+                ),
                 borderRadius: BorderRadius.circular(12),
                 border: const Border(
-                  bottom: BorderSide(color: Color(0xFFB88256), width: 13),
+                  bottom: BorderSide(color: Color(0xFFD59A61), width: 13),
                 ),
               ),
               padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
