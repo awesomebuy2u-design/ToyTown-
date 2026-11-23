@@ -61,6 +61,8 @@ Future<void> moveBear(WidgetTester tester) async {
 
 void main() {
   setUp(() {
+    TestWidgetsFlutterBinding.instance.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
   });
