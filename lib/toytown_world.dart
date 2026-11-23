@@ -4,17 +4,23 @@ import 'world_art.dart';
 import 'daily_pet_tasks.dart';
 import 'pet_memory_game.dart';
 import 'town_village.dart';
+import 'shop_shelves.dart';
+import 'listing.dart';
+import 'app_version.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ToyTownWorld extends StatefulWidget {
-  const ToyTownWorld({super.key, required this.openListings, required this.openParent, this.openShops, this.client});
+  const ToyTownWorld({super.key, required this.openListings, required this.openParent, this.openShops,
+    this.openMyListings, this.openChats, this.openOwnListing, this.client});
   final SupabaseClient? client;
   final VoidCallback openListings;
   final VoidCallback openParent;
   final VoidCallback? openShops;
+  final VoidCallback? openMyListings, openChats;
+  final Future<void> Function(Listing)? openOwnListing;
 
   @override
   State<ToyTownWorld> createState() => _ToyTownWorldState();
@@ -382,7 +388,9 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6EE),
-      appBar: AppBar(backgroundColor:const Color(0xFFFBF6EE),title: Text('ToyTown · ⭐ $stars'), actions: [IconButton(tooltip: 'Оновити прогрес', onPressed: saving ? null : loadProgress, icon: const Icon(Icons.refresh))]),
+      appBar: AppBar(backgroundColor:const Color(0xFFFBF6EE),title: Text('ToyTown · ⭐ $stars'), actions: [
+        IconButton(tooltip: 'Про ToyTown', onPressed: () => showToyTownVersion(context), icon: const Icon(Icons.info_outline)),
+        IconButton(tooltip: 'Оновити прогрес', onPressed: saving ? null : loadProgress, icon: const Icon(Icons.refresh))]),
       body: SafeArea(
         child: ListView(
           key: ValueKey('world-tab-$tab'),
@@ -407,6 +415,12 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
               theme: shopTheme, front: shopFront, balloons: decorated, flowers: flowers,
               awning: awning, petName: petName),
             const SizedBox(height: 12),
+            if (widget.openMyListings != null) FilledButton.icon(
+              key: const ValueKey('open-my-listings'), onPressed: widget.openMyListings,
+              icon: const Icon(Icons.inventory_2_outlined), label: const Text('Мої оголошення')),
+            if (widget.openChats != null) FilledButton.tonalIcon(
+              key: const ValueKey('open-my-chats'), onPressed: widget.openChats,
+              icon: const Icon(Icons.chat_bubble_outline), label: const Text('Повідомлення')),
             if (widget.openShops != null) FilledButton.tonalIcon(
               onPressed: widget.openShops, icon: const Icon(Icons.holiday_village_rounded),
               label: const Text('Крамнички інших родин')),
@@ -434,7 +448,17 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
           ] : [
             Text('Моя крамничка', key: const ValueKey('world-shop-heading'), style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height:12),
-            ShopScene(balloons:decorated,flowers:flowers,awning:awning,theme:shopTheme,front:shopFront,onTap:widget.openListings),
+            if (widget.openMyListings != null) FilledButton.icon(
+              key: const ValueKey('shop-manage-listings'), onPressed: widget.openMyListings,
+              icon: const Icon(Icons.inventory_2_outlined), label: const Text('Мої оголошення · додати / видалити')),
+            if (widget.openChats != null) TextButton.icon(onPressed: widget.openChats,
+              icon: const Icon(Icons.chat_bubble_outline), label: const Text('Повідомлення')),
+            const SizedBox(height: 12),
+            OwnShopShelves(key: ValueKey('shelves-$accountId-$familyId'),
+              repository: online && familyId != null ? SupabaseShopShelvesRepository(widget.client!) : null,
+              familyId: familyId, demo: !online, theme: shopTheme, front: shopFront,
+              balloons: decorated, flowers: flowers, awning: awning,
+              onOpen: widget.openOwnListing, onManage: widget.openMyListings),
             const SizedBox(height:12),
             shopThemes(),
             const SizedBox(height: 12),
