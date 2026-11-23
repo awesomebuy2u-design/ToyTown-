@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-enum DeletableContent { message, listing }
+enum DeletableContent { message, listing, conversation }
 
 class ContentDeleteButton extends StatefulWidget {
   const ContentDeleteButton(
@@ -21,7 +21,11 @@ class ContentDeleteButton extends StatefulWidget {
 class _ContentDeleteButtonState extends State<ContentDeleteButton> {
   bool busy = false;
   bool get listing => widget.kind == DeletableContent.listing;
-  String get label => listing ? 'Видалити оголошення' : 'Видалити повідомлення';
+  String get label => switch (widget.kind) {
+    DeletableContent.listing => 'Видалити оголошення',
+    DeletableContent.message => 'Видалити повідомлення',
+    DeletableContent.conversation => 'Видалити чат у мене',
+  };
 
   void feedback(String message) {
     if (!mounted) return;
@@ -38,7 +42,9 @@ class _ContentDeleteButtonState extends State<ContentDeleteButton> {
           context: context,
           builder: (ctx) => AlertDialog(
                 title: Text('$label?'),
-                content: Text(listing
+                content: Text(widget.kind == DeletableContent.conversation
+                    ? 'Уся переписка зникне з вашого списку й історії повідомлень. Переписка співрозмовника та угоди залишаться. Нове повідомлення знову відкриє чат.'
+                    : listing
                     ? 'Оголошення зникне з каталогу, пошуку та вашої крамнички. Листування й історія угод залишаться. Якщо є активна домовленість, спочатку завершіть або скасуйте її.'
                     : 'Повідомлення буде видалено з розмови для обох родин. Відновити його не вдасться.'),
                 actions: [
@@ -52,7 +58,7 @@ class _ContentDeleteButtonState extends State<ContentDeleteButton> {
               ));
       if (confirmed != true || !mounted) return;
       await widget.onDelete();
-      feedback(listing ? 'Оголошення видалено.' : 'Повідомлення видалено.');
+      feedback(widget.kind == DeletableContent.conversation ? 'Чат видалено у вас.' : listing ? 'Оголошення видалено.' : 'Повідомлення видалено.');
     } catch (error) {
       var message =
           'Не вдалося видалити. Перевірте з’єднання й спробуйте ще раз.';
@@ -78,10 +84,10 @@ class _ContentDeleteButtonState extends State<ContentDeleteButton> {
           onPressed: busy ? null : remove,
           icon: Icon(busy ? Icons.hourglass_top : Icons.delete_outline),
           iconSize: 18)
-      : TextButton.icon(
+      : Tooltip(message: label, child: TextButton.icon(
           onPressed: busy ? null : remove,
           icon: Icon(busy ? Icons.hourglass_top : Icons.delete_outline),
-          label: Text(busy ? 'Зачекайте…' : label));
+          label: Text(busy ? 'Зачекайте…' : label)));
 }
 
 class ConversationMessageBubble extends StatelessWidget {
@@ -122,7 +128,7 @@ class ConversationMessageBubble extends StatelessWidget {
                     if (mine && onDelete != null)
                       ContentDeleteButton(
                           kind: DeletableContent.message,
-                          compact: true,
+                          compact: false,
                           onDelete: onDelete!),
                   ]),
             ])));

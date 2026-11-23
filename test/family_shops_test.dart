@@ -50,6 +50,8 @@ void main() {
     final visit = find.byKey(const ValueKey('visit-shop-B'));
     await show(tester, visit); await tester.tap(visit); await tester.pumpAndSettle();
     expect(repo.visits, [('B', 0)]);
+    await show(tester, find.byKey(const ValueKey('shelf-toy-from-B')));
+    await tester.tap(find.byKey(const ValueKey('shelf-toy-from-B'))); await tester.pumpAndSettle();
     await show(tester, find.text('Переглянути оголошення'));
     expect(find.text('Іграшка from-A'), findsNothing);
     await tester.tap(find.text('Переглянути оголошення')); await tester.pumpAndSettle();

@@ -51,7 +51,7 @@ create policy owner_delete_pending on public.listings for delete to authenticate
   using(public.is_family_guardian(family_id) and status in ('pending','rejected'));
 create policy chat_read on public.family_conversations for select to authenticated
   using(public.is_family_guardian(family_a) or public.is_family_guardian(family_b));
-create policy message_read on public.family_messages for select to authenticated using(public.is_conversation_member(conversation_id));
+create policy "adult family members read conversation messages" on public.family_messages for select to authenticated using(public.is_conversation_member(conversation_id));
 create policy message_insert on public.family_messages for insert to authenticated
   with check(sender_user_id=auth.uid() and public.is_conversation_member(conversation_id));
 grant select,insert,update,delete on public.listings,public.family_messages to authenticated;

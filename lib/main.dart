@@ -8,6 +8,7 @@ import 'listing.dart';
 import 'family_shops.dart';
 import 'family_shops_map.dart';
 import 'content_actions.dart';
+import 'app_version.dart';
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -54,6 +55,14 @@ class WorldScreen extends StatelessWidget {
     openListings: () => openOnline(context, 0),
     openParent: () => openOnline(context, 4),
     openShops: () => openOnline(context, 0, shops: true),
+    openMyListings: () => openOnline(context, 1),
+    openChats: () => openOnline(context, 5),
+    openOwnListing: (item) async {
+      await Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => ListingDetails(
+        item: item, canContact: false,
+        onDelete: () async { await db!.rpc('delete_own_listing', params: {'target_listing': item.id}); },
+      )));
+    },
   );
 }
 
@@ -154,6 +163,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('ToyTown'), actions: [
+      IconButton(tooltip: 'Про ToyTown', onPressed: () => showToyTownVersion(context), icon: const Icon(Icons.info_outline)),
       IconButton(tooltip: 'Вийти', onPressed: () => db!.auth.signOut(), icon: const Icon(Icons.logout))
     ]),
     body: pages[index],
@@ -177,9 +187,9 @@ Future<List<Listing>> fetchListings({bool mine = false}) async {
   final user = db!.auth.currentUser!;
   var query = db!.from('listings').select();
   if (mine) {
-    final family = await db!.from('family_members').select('family_id').eq('user_id', user.id).maybeSingle();
-    if (family == null) return [];
-    query = db!.from('listings').select().eq('family_id', family['family_id']).isFilter('deleted_at', null);
+    final memberships = await db!.from('family_members').select('family_id').eq('user_id', user.id);
+    if (memberships.isEmpty) return [];
+    query = db!.from('listings').select().inFilter('family_id', memberships.map((row) => row['family_id']).toList()).isFilter('deleted_at', null);
   } else {
     query = db!.from('public_listings').select();
   }
@@ -296,14 +306,18 @@ class _MyShopScreenState extends State<MyShopScreen> {
     builder: (context, snap) {
       if (snap.hasError) return Center(child: Text('Спочатку створіть профіль родини у вкладці «Родина». ${snap.error}'));
       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-      return RefreshIndicator(onRefresh: refresh, child: snap.data!.isEmpty
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('Мої оголошення', style: Theme.of(context).textTheme.titleLarge)),
+        const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Керуйте іграшками родини. Кнопка видалення є на картці та всередині оголошення.')),
+        Expanded(child: RefreshIndicator(onRefresh: refresh, child: snap.data!.isEmpty
         ? ListView(children: const [SizedBox(height: 120), EmptyState(icon: Icons.add_box_outlined, title: 'Ваша крамничка порожня', subtitle: 'Додайте першу іграшку — вона з’явиться після батьківського підтвердження.')])
         : ListView.separated(padding: const EdgeInsets.all(16), itemCount: snap.data!.length,
           separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (_, i) {
             final item = snap.data![i];
             return ListingCard(key: ValueKey(item.id), item: item, showStatus: true,
               onDelete: () => deleteListing(item.id));
-          }));
+          }))),
+      ]);
     },
   );
 }
@@ -348,19 +362,19 @@ class _ListingCardState extends State<ListingCard> {
     final item = widget.item; final showStatus = widget.showStatus;
     return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [const Icon(Icons.toys, color: Color(0xFF6C63D9)), const SizedBox(width: 8), Expanded(child: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17))), if (showStatus) StatusChip(status: item.status), if (!showStatus) IconButton(tooltip: saved ? 'Прибрати зі збереженого' : 'Зберегти', onPressed: saving ? null : _toggleSaved, icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, color: saved ? const Color(0xFF6C63D9) : null))]),
+      if (showStatus && widget.onDelete != null) ContentDeleteButton(
+        key: ValueKey('delete-listing-${item.id}'), kind: DeletableContent.listing, onDelete: widget.onDelete!),
       const SizedBox(height: 8), Text(item.description),
       const SizedBox(height: 10),
       Wrap(spacing: 8, children: [Chip(label: Text(item.category)), Chip(label: Text(item.city)), Chip(label: Text(item.dealType == 'gift' ? 'Дарують' : item.dealType == 'exchange' ? 'Обмін' : 'Продаж'))]),
       TextButton.icon(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => ListingDetails(item: item, canContact: !showStatus),
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<bool>(
+          builder: (_) => ListingDetails(item: item, canContact: !showStatus, onDelete: widget.onDelete),
         )),
         icon: const Icon(Icons.open_in_new),
         label: const Text('Переглянути оголошення'),
       ),
       if (!showStatus) Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>_startListingChat(context,item),icon:const Icon(Icons.chat_bubble_outline),label:const Text('Написати родині'))),
-      if (showStatus && widget.onDelete != null) ContentDeleteButton(
-        kind: DeletableContent.listing, onDelete: widget.onDelete!),
     ])));
   }
 }
@@ -396,10 +410,11 @@ class _SavedListingsScreenState extends State<SavedListingsScreen> {
 }
 
 class ListingDetails extends StatefulWidget {
-  const ListingDetails({super.key, required this.item, required this.canContact});
+  const ListingDetails({super.key, required this.item, required this.canContact, this.onDelete});
 
   final Listing item;
   final bool canContact;
+  final Future<void> Function()? onDelete;
 
   @override
   State<ListingDetails> createState() => _ListingDetailsState();
@@ -407,6 +422,24 @@ class ListingDetails extends StatefulWidget {
 
 class _ListingDetailsState extends State<ListingDetails> {
   late Future<String>? photo = loadPhoto();
+  bool ownsListing = false;
+
+  @override
+  void initState() { super.initState(); ownsListing = widget.onDelete != null; if (!ownsListing) checkOwner(); }
+  Future<void> checkOwner() async {
+    if (db?.auth.currentUser == null) return;
+    try {
+      final members = await db!.from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id);
+      if (members.isEmpty) return;
+      final row = await db!.from('listings').select('id').eq('id', widget.item.id).inFilter('family_id', members.map((member) => member['family_id']).toList()).isFilter('deleted_at', null).maybeSingle();
+      if (mounted) setState(() => ownsListing = row != null);
+    } catch (_) { /* Ownership is never inferred after a failed request. */ }
+  }
+  Future<void> removeListing() async {
+    if (widget.onDelete != null) { await widget.onDelete!(); }
+    else { await db!.rpc('delete_own_listing', params: {'target_listing': widget.item.id}); }
+    if (mounted) Navigator.of(context).pop(true);
+  }
 
   Future<String>? loadPhoto() {
     final path = widget.item.photoPath;
@@ -434,7 +467,7 @@ class _ListingDetailsState extends State<ListingDetails> {
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return TextButton(
-                      onPressed: () => setState(() => photo = loadPhoto()),
+                      onPressed: () => setState(() { photo = loadPhoto(); }),
                       child: const Text('Не вдалося завантажити фото. Повторити'),
                     );
                   }
@@ -448,7 +481,7 @@ class _ListingDetailsState extends State<ListingDetails> {
                     fit: BoxFit.contain,
                     semanticLabel: 'Фото іграшки',
                     errorBuilder: (_, __, ___) => TextButton(
-                      onPressed: () => setState(() => photo = loadPhoto()),
+                      onPressed: () => setState(() { photo = loadPhoto(); }),
                       child: const Text('Не вдалося відкрити фото. Повторити'),
                     ),
                   );
@@ -463,7 +496,7 @@ class _ListingDetailsState extends State<ListingDetails> {
               Text('${item.price} грн'),
             const SizedBox(height: 12),
             Text(item.description),
-            if (widget.canContact)
+            if (widget.canContact && !ownsListing)
               FilledButton.icon(
                 onPressed: () => _startListingChat(context, item),
                 icon: const Icon(Icons.chat_bubble_outline),
@@ -472,6 +505,8 @@ class _ListingDetailsState extends State<ListingDetails> {
           ],
         ),
       ),
+      bottomNavigationBar: ownsListing ? SafeArea(child: Padding(padding: const EdgeInsets.all(12),
+        child: ContentDeleteButton(kind: DeletableContent.listing, onDelete: removeListing))) : null,
     );
   }
 }
@@ -689,7 +724,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key});
+  const ChatsScreen({super.key, this.loadConversations, this.clearConversation});
+  final Future<List<Map<String, dynamic>>> Function()? loadConversations;
+  final Future<void> Function(String)? clearConversation;
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
 }
@@ -700,9 +737,21 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void initState() { super.initState(); load(); }
   Future<void> load() async {
     try {
+      if (widget.loadConversations != null) {
+        final rows = await widget.loadConversations!();
+        if (mounted) setState(() => chats = rows);
+        return;
+      }
       final rows = await db!.from('family_conversations').select('id,listing_id,created_at,updated_at,family_a,family_b,listing:listings(title)').order('updated_at', ascending:false);
-      if (mounted) setState(() => chats = List<Map<String,dynamic>>.from(rows));
+      final states = await db!.from('conversation_user_state').select('conversation_id,hidden').eq('user_id', db!.auth.currentUser!.id);
+      final hidden = {for (final row in states) if (row['hidden'] == true) row['conversation_id']};
+      if (mounted) setState(() => chats = List<Map<String,dynamic>>.from(rows).where((row) => !hidden.contains(row['id'])).toList());
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Не вдалося завантажити чати: $e'))); }
+  }
+  Future<void> clearConversation(String id) async {
+    if (widget.clearConversation != null) { await widget.clearConversation!(id); }
+    else { await db!.rpc('clear_own_conversation', params: {'target_conversation': id}); }
+    if (mounted) await load();
   }
   Future<void> startChat() async {
     final listing = TextEditingController();
@@ -730,13 +779,19 @@ class _ChatsScreenState extends State<ChatsScreen> {
     const SizedBox(height:8),const Text('Листування доступне лише дорослим учасникам родин. Не надсилайте адресу, телефон дитини або інші персональні дані.'),
     const SizedBox(height:16),
     if(chats.isEmpty) const EmptyState(icon:Icons.forum_outlined,title:'Поки немає розмов',subtitle:'Відкрийте оголошення в каталозі та натисніть «Написати родині».'),
-    ...chats.map((c)=>Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.forum_outlined)),title:Text((c['listing'] is Map ? c['listing']['title'] : null) ?? 'Домовленість між родинами'),subtitle:Text('Створено: ${c['created_at'].toString().substring(0,10)}'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ConversationScreen(conversationId:c['id'].toString(),title:(c['listing'] is Map ? c['listing']['title'] : null) ?? 'Розмова'))).then((_)=>load())))),
+    ...chats.map((c)=>Card(child:ListTile(leading:const CircleAvatar(child:Icon(Icons.forum_outlined)),title:Text((c['listing'] is Map ? c['listing']['title'] : null) ?? 'Домовленість між родинами'),subtitle:Text('Створено: ${c['created_at'].toString().substring(0,10)}'),
+      trailing: ContentDeleteButton(kind: DeletableContent.conversation, compact: true, onDelete: () => clearConversation(c['id'].toString())),
+      onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>ConversationScreen(conversationId:c['id'].toString(),title:(c['listing'] is Map ? c['listing']['title'] : null) ?? 'Розмова'))).then((_)=>load())))),
   ]));
 }
 
 class ConversationScreen extends StatefulWidget {
   final String conversationId, title;
-  const ConversationScreen({super.key,required this.conversationId,required this.title});
+  const ConversationScreen({super.key,required this.conversationId,required this.title,
+    this.messageLoader, this.clearChat, this.currentUserId});
+  final Future<List<Map<String, dynamic>>> Function()? messageLoader;
+  final Future<void> Function()? clearChat;
+  final String? currentUserId;
   @override
   State<ConversationScreen> createState()=>_ConversationScreenState();
 }
@@ -748,7 +803,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   void initState(){super.initState();load();}
   Future<void> load() async {
-    try { final rows=await db!.from('family_messages').select('id,sender_user_id,body,created_at').eq('conversation_id',widget.conversationId).order('created_at');
+    try { final rows=widget.messageLoader != null ? await widget.messageLoader!()
+      : await db!.from('family_messages').select('id,sender_user_id,body,created_at').eq('conversation_id',widget.conversationId).order('created_at');
       if(mounted)setState(()=>messages=List<Map<String,dynamic>>.from(rows)
         .where((message) => !deletedMessageIds.contains(message['id'].toString())).toList());
     } catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Помилка завантаження: $e')));}
@@ -783,11 +839,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
       messages.removeWhere((message) => message['id'].toString() == id);
     });
   }
+  Future<void> clearChat() async {
+    if (widget.clearChat != null) { await widget.clearChat!(); }
+    else { await db!.rpc('clear_own_conversation', params: {'target_conversation': widget.conversationId}); }
+    if (mounted) Navigator.of(context).pop();
+  }
   @override
   void dispose(){composer.dispose();super.dispose();}
   @override
-  Widget build(BuildContext context){final myId=db!.auth.currentUser!.id;return Scaffold(
-    appBar:AppBar(title:Text(widget.title,maxLines:1,overflow:TextOverflow.ellipsis),actions:[IconButton(tooltip:'Створити домовленість',icon:const Icon(Icons.handshake_outlined),onPressed:createAgreement),PopupMenuButton<String>(tooltip:'Домовленість',onSelected:(v){composer.text=v;},itemBuilder:(_)=>const [PopupMenuItem(value:'Пропоную обмінятися цією іграшкою. Чи цікава вам така пропозиція?',child:Text('Запропонувати обмін')),PopupMenuItem(value:'Чи можемо домовитися про дарування цієї іграшки?',child:Text('Запропонувати дарування')),PopupMenuItem(value:'Чи зручна вам зустріч у громадському місці? Не надсилайте домашню адресу.',child:Text('Узгодити безпечну передачу'))]),IconButton(tooltip:'Оновити',onPressed:load,icon:const Icon(Icons.refresh))]),
+  Widget build(BuildContext context){final myId=widget.currentUserId ?? db!.auth.currentUser!.id;return Scaffold(
+    appBar:AppBar(title:Text(widget.title,maxLines:1,overflow:TextOverflow.ellipsis),actions:[
+      ContentDeleteButton(kind: DeletableContent.conversation, compact: true, onDelete: clearChat),
+      IconButton(tooltip:'Створити домовленість',icon:const Icon(Icons.handshake_outlined),onPressed:createAgreement),PopupMenuButton<String>(tooltip:'Домовленість',onSelected:(v){composer.text=v;},itemBuilder:(_)=>const [PopupMenuItem(value:'Пропоную обмінятися цією іграшкою. Чи цікава вам така пропозиція?',child:Text('Запропонувати обмін')),PopupMenuItem(value:'Чи можемо домовитися про дарування цієї іграшки?',child:Text('Запропонувати дарування')),PopupMenuItem(value:'Чи зручна вам зустріч у громадському місці? Не надсилайте домашню адресу.',child:Text('Узгодити безпечну передачу'))]),IconButton(tooltip:'Оновити',onPressed:load,icon:const Icon(Icons.refresh))]),
     body:Column(children:[Expanded(child:loading?const Center(child:CircularProgressIndicator()):messages.isEmpty?const EmptyState(icon:Icons.chat_bubble_outline,title:'Почніть розмову',subtitle:'Домовляйтеся про іграшку лише як дорослі представники родин.'):ListView.builder(padding:const EdgeInsets.all(16),itemCount:messages.length,itemBuilder:(context,i){
       final m=messages[i]; final id=m['id'].toString();
       return ConversationMessageBubble(key:ValueKey(id), body:m['body']??'',

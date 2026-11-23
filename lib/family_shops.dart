@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'listing.dart';
 import 'world_art.dart';
+import 'shop_shelves.dart';
 
 class PublicFamilyShop {
   PublicFamilyShop.fromMap(Map<String, dynamic> row)
@@ -21,11 +22,17 @@ abstract class FamilyShopsRepository {
   static const pageSize = 24;
   Future<List<PublicFamilyShop>> browse(String term, int offset);
   Future<List<Listing>> listings(String shopId, int offset);
+  Future<ShopShelfLayout> shelfLayout(String shopId) async => const ShopShelfLayout();
+  Future<String>? photo(String path) => null;
 }
 
 class SupabaseFamilyShopsRepository implements FamilyShopsRepository {
   SupabaseFamilyShopsRepository(this.client);
   final SupabaseClient client;
+  @override
+  Future<ShopShelfLayout> shelfLayout(String shopId) => SupabaseShopShelvesRepository(client).load(shopId);
+  @override
+  Future<String> photo(String path) => client.storage.from('listing-images').createSignedUrl(path, 60);
   @override
   Future<List<PublicFamilyShop>> browse(String term, int offset) async {
     final rows = await client.rpc('browse_family_shops', params: {
@@ -132,6 +139,7 @@ class FamilyShopScreen extends StatefulWidget {
 
 class _FamilyShopScreenState extends State<FamilyShopScreen> {
   List<Listing> items = [];
+  ShopShelfLayout shelfLayout = const ShopShelfLayout();
   bool loading = true, loadingMore = false, more = false, failedAppend = false;
   String? error;
   int generation = 0, offset = 0;
@@ -148,8 +156,10 @@ class _FamilyShopScreenState extends State<FamilyShopScreen> {
     });
     try {
       final rows = await widget.repository.listings(widget.shop.id, offset);
+      final layout = !append && rows.isNotEmpty ? await widget.repository.shelfLayout(widget.shop.id) : shelfLayout;
       if (!mounted || ticket != generation) return;
       setState(() {
+        shelfLayout = layout;
         final combined = append ? [...items, ...rows] : rows;
         items = {for (final item in combined) item.id: item}.values.toList();
         offset += rows.length; more = rows.length == FamilyShopsRepository.pageSize;
@@ -167,16 +177,23 @@ class _FamilyShopScreenState extends State<FamilyShopScreen> {
       child: RefreshIndicator(onRefresh: () => load(), child: ListView(
         physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
           Text(shop.cityLabel),
-          Center(child: SizedBox(width: 220, child: ShopScene(theme: shop.theme, front: shop.front,
-            balloons: shop.balloons, flowers: shop.flowers, awning: shop.awning))),
+          if (items.isNotEmpty) ShelfCabinet(items: items, layout: shelfLayout,
+            theme: shop.theme, front: shop.front, balloons: shop.balloons,
+            flowers: shop.flowers, awning: shop.awning,
+            loadPhoto: (path) async => await widget.repository.photo(path) ?? '',
+            onOpen: (item) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(
+              appBar: AppBar(title: Text(item.title)),
+              body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: widget.listingBuilder(item)))))),
           const SizedBox(height: 12),
           Text('Опубліковані іграшки', style: Theme.of(context).textTheme.titleLarge),
           if (loading) const Center(child: CircularProgressIndicator()),
           if (error != null) ...[Text(error!), TextButton(onPressed: () => load(append: failedAppend), child: const Text('Повторити'))],
           if (!loading && error == null && items.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 24),
             child: Text('Зараз у цій крамничці немає опублікованих іграшок. Оновіть список або поверніться до інших крамничок.')),
-          for (final item in items) Padding(padding: const EdgeInsets.only(top: 12),
-            child: KeyedSubtree(key: ValueKey('shop-listing-${item.id}'), child: widget.listingBuilder(item))),
+          if (items.isNotEmpty) ExpansionTile(title: const Text('Оголошення списком'), children: [
+            for (final item in items) Padding(padding: const EdgeInsets.only(top: 12),
+              child: KeyedSubtree(key: ValueKey('shop-listing-${item.id}'), child: widget.listingBuilder(item))),
+          ]),
           if (loadingMore) const Center(child: CircularProgressIndicator()),
           if (!loading && !loadingMore && more) TextButton(key: const ValueKey('more-shop-listings'),
             onPressed: () => load(append: true), child: const Text('Ще іграшки')),
