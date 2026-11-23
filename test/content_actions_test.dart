@@ -135,6 +135,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'deleting an opened listing refreshes the shop without reopening it',
+      (tester) async {
+    final rows = [
+      Listing.fromMap({'id': 'detail-A', 'title': 'Ведмедик на полиці', 'status': 'approved'})
+    ];
+    final removed = <String>[];
+    await tester.pumpWidget(screen(MyShopScreen(
+      loadListings: () async => List.of(rows),
+      deleteListing: (id) async {
+        removed.add(id);
+        rows.removeWhere((item) => item.id == id);
+      },
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Переглянути оголошення'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ведмедик на полиці'), findsWidgets);
+    await tester.tap(find.text('Видалити оголошення'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Видалити'));
+    await tester.pumpAndSettle();
+    expect(removed, ['detail-A']);
+    expect(find.text('Ведмедик на полиці'), findsNothing);
+    expect(find.text('Ваша крамничка порожня'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('public listing cards have no removal action', (tester) async {
     await tester.pumpWidget(screen(ListingCard(
         item: Listing.fromMap({'id': 'B', 'title': 'Чужа іграшка'}))));
