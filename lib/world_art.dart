@@ -49,6 +49,12 @@ class _PetSceneState extends State<PetScene> with TickerProviderStateMixin {
             Positioned(top: 76, left: 18, child: Icon(Icons.cloud_rounded, size: 28, color: Colors.white.withValues(alpha: .6))),
             Positioned(bottom: 18, left: 18, child: Icon(Icons.local_florist_rounded, size: 24, color: const Color(0xFFE9A3B2).withValues(alpha: .85))),
             Positioned(bottom: 30, right: 20, child: Icon(Icons.spa_rounded, size: 24, color: const Color(0xFF78B99A).withValues(alpha: .8))),
+            Positioned(top: 112, right: 30, child: Transform.rotate(
+              angle: reduced ? 0 : math.sin(idle.value * math.pi * 2) * .12,
+              child: const Icon(Icons.flutter_dash_rounded, size: 25, color: Color(0xFFEDB0C9)),
+            )),
+            Positioned(bottom: 64, left: 30, child: Icon(Icons.auto_awesome_rounded,
+              size: 17, color: const Color(0xFFE7B959).withValues(alpha: .7))),
             Positioned(bottom: 14, child: Container(width: 170-jump*15, height: 24, decoration: BoxDecoration(color: const Color(0xFF597F6C).withValues(alpha: .12), borderRadius: BorderRadius.circular(100)))),
             Transform.translate(offset: Offset(0, 4-breathe*4-jump*18), child: Transform.rotate(angle: jump*.04,
               child: Transform.scale(scale: (widget.grown ? 1.0 : .94)+breathe*.008,
