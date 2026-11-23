@@ -26,13 +26,14 @@ class Shelves extends ShopShelvesRepository {
   @override
   final String accountId;
   final saved = <String, ShopShelfLayout>{};
+  List<Listing>? inventoryOverride;
   bool failSave = false;
   bool failLoad = false;
   Completer<void>? saveGate;
   @override
   Future<List<Listing>> toys(String familyId) async {
     if (failLoad) throw StateError('offline');
-    return familyId == 'f' ? List.of(inventory) : [toy('G', 'Кубики')];
+    return familyId == 'f' ? List.of(inventoryOverride ?? inventory) : [toy('G', 'Кубики')];
   }
 
   @override
@@ -86,6 +87,22 @@ void main() {
     );
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
+  });
+
+  testWidgets('refresh removes deleted toys from visible shelves', (tester) async {
+    final repository = Shelves();
+    await tester.pumpWidget(screen(repository));
+    await tester.pumpAndSettle();
+    expect(find.text('Ведмедик'), findsOneWidget);
+    repository.inventoryOverride = [toy('B', 'Машинка'), toy('C', 'Ракета')];
+    final refresh = find.byKey(const ValueKey('refresh-shop-shelves'));
+    await tester.ensureVisible(refresh);
+    await tester.pumpAndSettle();
+    await tester.tap(refresh);
+    await tester.pumpAndSettle();
+    expect(find.text('Ведмедик'), findsNothing);
+    expect(find.text('Машинка'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
