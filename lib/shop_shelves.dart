@@ -725,6 +725,17 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
                   if (mounted) await load();
                 },
         ),
+        if (connected && hasInventory) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const ValueKey('refresh-shop-shelves'),
+              onPressed: loading || busy ? null : load,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Оновити іграшки'),
+            ),
+          ),
+        ],
         if (connected && !loading && hasInventory) ...[
           const SizedBox(height: 12),
           const Text(
