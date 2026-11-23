@@ -23,6 +23,7 @@ void main() {
     expect(sprite.right, lessThanOrEqualTo(scene.right));
     expect(find.text('Друг'), findsOneWidget);
     expect(find.byIcon(Icons.local_florist_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.flutter_dash_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
