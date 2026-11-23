@@ -315,7 +315,7 @@ class _MyShopScreenState extends State<MyShopScreen> {
           separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (_, i) {
             final item = snap.data![i];
             return ListingCard(key: ValueKey(item.id), item: item, showStatus: true,
-              onDelete: () => deleteListing(item.id));
+              onDelete: () => deleteListing(item.id), onChanged: refresh);
           }))),
       ]);
     },
@@ -325,7 +325,8 @@ class _MyShopScreenState extends State<MyShopScreen> {
 class ListingCard extends StatefulWidget {
   final Listing item; final bool showStatus;
   final Future<void> Function()? onDelete;
-  const ListingCard({super.key, required this.item, this.showStatus = false, this.onDelete});
+  final Future<void> Function()? onChanged;
+  const ListingCard({super.key, required this.item, this.showStatus = false, this.onDelete, this.onChanged});
   @override
   State<ListingCard> createState() => _ListingCardState();
 }
@@ -368,9 +369,12 @@ class _ListingCardState extends State<ListingCard> {
       const SizedBox(height: 10),
       Wrap(spacing: 8, children: [Chip(label: Text(item.category)), Chip(label: Text(item.city)), Chip(label: Text(item.dealType == 'gift' ? 'Дарують' : item.dealType == 'exchange' ? 'Обмін' : 'Продаж'))]),
       TextButton.icon(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute<bool>(
-          builder: (_) => ListingDetails(item: item, canContact: !showStatus, onDelete: widget.onDelete),
-        )),
+        onPressed: () async {
+          final deleted = await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(
+            builder: (_) => ListingDetails(item: item, canContact: !showStatus, onDelete: widget.onDelete),
+          ));
+          if (deleted == true && context.mounted) await widget.onChanged?.call();
+        },
         icon: const Icon(Icons.open_in_new),
         label: const Text('Переглянути оголошення'),
       ),
