@@ -849,9 +849,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   Widget build(BuildContext context){final myId=widget.currentUserId ?? db!.auth.currentUser!.id;return Scaffold(
     appBar:AppBar(title:Text(widget.title,maxLines:1,overflow:TextOverflow.ellipsis),actions:[
-      ContentDeleteButton(kind: DeletableContent.conversation, compact: true, onDelete: clearChat),
       IconButton(tooltip:'Створити домовленість',icon:const Icon(Icons.handshake_outlined),onPressed:createAgreement),PopupMenuButton<String>(tooltip:'Домовленість',onSelected:(v){composer.text=v;},itemBuilder:(_)=>const [PopupMenuItem(value:'Пропоную обмінятися цією іграшкою. Чи цікава вам така пропозиція?',child:Text('Запропонувати обмін')),PopupMenuItem(value:'Чи можемо домовитися про дарування цієї іграшки?',child:Text('Запропонувати дарування')),PopupMenuItem(value:'Чи зручна вам зустріч у громадському місці? Не надсилайте домашню адресу.',child:Text('Узгодити безпечну передачу'))]),IconButton(tooltip:'Оновити',onPressed:load,icon:const Icon(Icons.refresh))]),
-    body:Column(children:[Expanded(child:loading?const Center(child:CircularProgressIndicator()):messages.isEmpty?const EmptyState(icon:Icons.chat_bubble_outline,title:'Почніть розмову',subtitle:'Домовляйтеся про іграшку лише як дорослі представники родин.'):ListView.builder(padding:const EdgeInsets.all(16),itemCount:messages.length,itemBuilder:(context,i){
+    body:Column(children:[
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Align(alignment: Alignment.centerRight,
+        child: ContentDeleteButton(kind: DeletableContent.conversation, onDelete: clearChat))),
+      Expanded(child:loading?const Center(child:CircularProgressIndicator()):messages.isEmpty?const EmptyState(icon:Icons.chat_bubble_outline,title:'Почніть розмову',subtitle:'Домовляйтеся про іграшку лише як дорослі представники родин.'):ListView.builder(padding:const EdgeInsets.all(16),itemCount:messages.length,itemBuilder:(context,i){
       final m=messages[i]; final id=m['id'].toString();
       return ConversationMessageBubble(key:ValueKey(id), body:m['body']??'',
         createdAt:m['created_at'].toString(), mine:m['sender_user_id']==myId,

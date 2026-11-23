@@ -93,6 +93,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Моє повідомлення'), findsOneWidget);
       expect(find.text('Відповідь співрозмовника'), findsOneWidget);
+    expect(find.text('Видалити чат у мене').hitTestable(), findsOneWidget);
       expect(find.text('Видалити повідомлення'), findsOneWidget);
       await tester.tap(find.byTooltip('Видалити чат у мене'));
       await tester.pumpAndSettle();
