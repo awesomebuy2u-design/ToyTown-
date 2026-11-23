@@ -21,6 +21,8 @@ void main() {
     final sprite = tester.getRect(find.byType(Image));
     expect(sprite.left, greaterThanOrEqualTo(scene.left));
     expect(sprite.right, lessThanOrEqualTo(scene.right));
+    expect(find.text('Друг'), findsOneWidget);
+    expect(find.byIcon(Icons.local_florist_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
