@@ -792,9 +792,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
 class ConversationScreen extends StatefulWidget {
   final String conversationId, title;
   const ConversationScreen({super.key,required this.conversationId,required this.title,
-    this.messageLoader, this.clearChat, this.currentUserId});
+    this.messageLoader, this.clearChat, this.currentUserId, this.removeMessage});
   final Future<List<Map<String, dynamic>>> Function()? messageLoader;
   final Future<void> Function()? clearChat;
+  final Future<void> Function(String)? removeMessage;
   final String? currentUserId;
   @override
   State<ConversationScreen> createState()=>_ConversationScreenState();
@@ -837,7 +838,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
     finally{if(mounted)setState(()=>sending=false);}
   }
   Future<void> deleteMessage(String id) async {
-    await db!.rpc('delete_own_message', params: {'target_message': id});
+    if (widget.removeMessage != null) {
+      await widget.removeMessage!(id);
+    } else {
+      await db!.rpc('delete_own_message', params: {'target_message': id});
+    }
     if (mounted) setState(() {
       deletedMessageIds.add(id);
       messages.removeWhere((message) => message['id'].toString() == id);
@@ -861,7 +866,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       final m=messages[i]; final id=m['id'].toString();
       return ConversationMessageBubble(key:ValueKey(id), body:m['body']??'',
         createdAt:m['created_at'].toString(), mine:m['sender_user_id']==myId,
-        onDelete:()=>deleteMessage(id));
+        onDelete:m['sender_user_id']==myId ? ()=>deleteMessage(id) : null);
     })),
     SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Row(children:[Expanded(child:TextField(controller:composer,minLines:1,maxLines:4,maxLength:1000,decoration:const InputDecoration(hintText:'Повідомлення…',counterText:'',border:OutlineInputBorder()))),const SizedBox(width:8),IconButton.filled(onPressed:sending?null:send,icon:const Icon(Icons.send))]))),
   ]));}
