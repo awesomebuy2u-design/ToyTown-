@@ -45,6 +45,10 @@ class _PetSceneState extends State<PetScene> with TickerProviderStateMixin {
           return Stack(alignment: Alignment.center, children: [
             Positioned(top: 20, left: 24, child: Icon(Icons.wb_sunny_rounded, size: 42, color: const Color(0xFFF4C56B).withValues(alpha: .6))),
             Positioned(bottom: 0, left: 0, right: 0, height: 70, child: Container(decoration: const BoxDecoration(color: Color(0xFFCAE5D1), borderRadius: BorderRadius.vertical(top: Radius.elliptical(300,50))))),
+            Positioned(top: 42, right: 20, child: Icon(Icons.cloud_rounded, size: 42, color: Colors.white.withValues(alpha: .75))),
+            Positioned(top: 76, left: 18, child: Icon(Icons.cloud_rounded, size: 28, color: Colors.white.withValues(alpha: .6))),
+            Positioned(bottom: 18, left: 18, child: Icon(Icons.local_florist_rounded, size: 24, color: const Color(0xFFE9A3B2).withValues(alpha: .85))),
+            Positioned(bottom: 30, right: 20, child: Icon(Icons.spa_rounded, size: 24, color: const Color(0xFF78B99A).withValues(alpha: .8))),
             Positioned(bottom: 14, child: Container(width: 170-jump*15, height: 24, decoration: BoxDecoration(color: const Color(0xFF597F6C).withValues(alpha: .12), borderRadius: BorderRadius.circular(100)))),
             Transform.translate(offset: Offset(0, 4-breathe*4-jump*18), child: Transform.rotate(angle: jump*.04,
               child: Transform.scale(scale: (widget.grown ? 1.0 : .94)+breathe*.008,
@@ -56,6 +60,20 @@ class _PetSceneState extends State<PetScene> with TickerProviderStateMixin {
                   Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _PetClothes(kind: widget.kind, hat: widget.hat, bow: widget.bow, outfit: widget.outfit)))),
                 ]))))),
             if (jump > .05) Positioned(top: 32-jump*15, right: 54, child: Opacity(opacity: jump.clamp(0.0,1.0).toDouble(), child: Icon(widget.activity == 'feed' ? Icons.restaurant_rounded : widget.activity == 'play' ? Icons.sports_tennis_rounded : widget.activity == 'brush' ? Icons.auto_awesome_rounded : Icons.favorite_rounded,color:const Color(0xFFE98599),size:32))),
+            Positioned(top: 12, left: 12, right: 12, child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 210),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .86),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Text(widget.name, textAlign: TextAlign.center,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF527969),
+                    fontSize: 14, fontWeight: FontWeight.w700)),
+              ),
+            )),
             const Positioned(bottom: 7, right: 14, child: Text('Погладь мене ♡',style:TextStyle(fontSize:12,color:Color(0xFF456555)))),
           ]);
         }),
