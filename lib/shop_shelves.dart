@@ -133,24 +133,6 @@ class ShelfCabinet extends StatelessWidget {
               tooltip: 'Переставити ${item.title}',
               onSelected: (shelf) => onMove?.call(item.id, shelf),
               itemBuilder: (_) => [
-                const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE5A83C)),
-            const SizedBox(width: 6),
-            Text(
-              '${items.length} ${items.length == 1 ? 'іграшка' : 'іграшок'} на вітрині',
-              style: const TextStyle(
-                color: Color(0xFF6A567B),
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE5A83C)),
-          ],
-        ),
         for (var shelf = 0; shelf < layout.shelfCount; shelf++)
                   PopupMenuItem(
                     value: shelf,
@@ -228,6 +210,24 @@ class ShelfCabinet extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE5A83C)),
+            const SizedBox(width: 6),
+            Text(
+              '${items.length} ${items.length == 1 ? 'іграшка' : 'іграшок'} на вітрині',
+              style: const TextStyle(
+                color: Color(0xFF6A567B),
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE5A83C)),
+          ],
         ),
         for (var shelf = 0; shelf < layout.shelfCount; shelf++)
           DragTarget<String>(
