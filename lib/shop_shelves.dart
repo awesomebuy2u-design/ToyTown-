@@ -217,12 +217,16 @@ class ShelfCabinet extends StatelessWidget {
           children: [
             const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE5A83C)),
             const SizedBox(width: 6),
-            Text(
-              '${items.length} ${items.length == 1 ? 'іграшка' : 'іграшок'} на вітрині',
-              style: const TextStyle(
-                color: Color(0xFF6A567B),
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+            Flexible(
+              child: Text(
+                '${items.length} ${items.length == 1 ? 'іграшка' : 'іграшок'} на вітрині',
+                textAlign: TextAlign.center,
+                softWrap: true,
+                style: const TextStyle(
+                  color: Color(0xFF6A567B),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
               ),
             ),
             const SizedBox(width: 6),
