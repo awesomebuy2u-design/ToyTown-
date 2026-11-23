@@ -527,6 +527,7 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
   List<Listing> items = [];
   ShopShelfLayout layout = const ShopShelfLayout();
   bool loading = false, busy = false, dirty = false, preview = false;
+  bool hasInventory = false;
   String? error, saved;
   String? loadedScope;
   int generation = 0;
@@ -559,6 +560,7 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
       loadedScope = currentScope;
       setState(() {
         items = [];
+        hasInventory = false;
         layout = const ShopShelfLayout();
         dirty = false;
         busy = false;
@@ -590,6 +592,7 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
             );
       setState(() {
         items = toys;
+        hasInventory = true;
         layout = ShopShelfLayout(
           shelfCount: loaded.shelfCount,
           placements: {
@@ -611,7 +614,7 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
   }
 
   void change(ShopShelfLayout next) {
-    if (busy || loading || !connected) return;
+    if (busy || loading || !connected || !hasInventory) return;
     next = ShopShelfLayout(
       shelfCount: next.shelfCount,
       placements: {
@@ -643,7 +646,7 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
     ),
   );
   Future<void> save() async {
-    if (busy || !dirty || !connected) return;
+    if (busy || !dirty || !connected || !hasInventory) return;
     final ticket = generation, key = draftKey;
     final family = widget.familyId!,
         repository = widget.repository!,
@@ -710,14 +713,19 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
           editable: connected && !loading && !busy && !preview && error == null,
           onMove: move,
           loadPhoto: widget.repository?.photo,
-          onOpen: widget.demo || widget.onOpen == null
+          onOpen:
+              widget.demo ||
+                  widget.onOpen == null ||
+                  busy ||
+                  loading ||
+                  !hasInventory
               ? null
               : (item) async {
                   await widget.onOpen!(item);
                   if (mounted) await load();
                 },
         ),
-        if (connected && !loading) ...[
+        if (connected && !loading && hasInventory) ...[
           const SizedBox(height: 12),
           const Text(
             'Підтверджені іграшки можна перетягувати між поличками або натиснути «Переставити».',

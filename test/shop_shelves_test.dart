@@ -1,7 +1,10 @@
 import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -24,14 +27,20 @@ class Shelves extends ShopShelvesRepository {
   final String accountId;
   final saved = <String, ShopShelfLayout>{};
   bool failSave = false;
+  bool failLoad = false;
+  Completer<void>? saveGate;
   @override
-  Future<List<Listing>> toys(String familyId) async =>
-      familyId == 'f' ? List.of(inventory) : [toy('G', 'Кубики')];
+  Future<List<Listing>> toys(String familyId) async {
+    if (failLoad) throw StateError('offline');
+    return familyId == 'f' ? List.of(inventory) : [toy('G', 'Кубики')];
+  }
+
   @override
   Future<ShopShelfLayout> load(String familyId) async =>
       saved[familyId] ?? const ShopShelfLayout();
   @override
   Future<void> save(String familyId, ShopShelfLayout layout) async {
+    if (saveGate != null) await saveGate!.future;
     if (failSave) throw StateError('offline');
     saved[familyId] = ShopShelfLayout.fromMap(layout.toMap());
   }
@@ -40,11 +49,19 @@ class Shelves extends ShopShelvesRepository {
   Future<String> photo(String path) async => throw StateError('offline');
 }
 
-Widget screen(Shelves repository, {String family = 'f'}) => MaterialApp(
+Widget screen(
+  Shelves repository, {
+  String family = 'f',
+  Future<void> Function(Listing)? onOpen,
+}) => MaterialApp(
   home: Scaffold(
     body: SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: OwnShopShelves(repository: repository, familyId: family),
+      child: OwnShopShelves(
+        repository: repository,
+        familyId: family,
+        onOpen: onOpen,
+      ),
     ),
   ),
 );
@@ -61,8 +78,12 @@ Future<void> moveBear(WidgetTester tester) async {
 
 void main() {
   setUp(() {
-    TestWidgetsFlutterBinding.instance.platformDispatcher.accessibilityFeaturesTestValue =
-        const FakeAccessibilityFeatures(disableAnimations: true);
+    TestWidgetsFlutterBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(
+      disableAnimations: true,
+    );
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
   });
@@ -239,13 +260,98 @@ void main() {
   );
 
   testWidgets(
+    'failed inventory loading cannot overwrite a saved shelf layout',
+    (tester) async {
+      final repository = Shelves()..failLoad = true;
+      repository.saved['f'] = const ShopShelfLayout(
+        shelfCount: 2,
+        placements: {'A': 1},
+      );
+      await tester.pumpWidget(screen(repository));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Не вдалося завантажити полички'),
+        findsOneWidget,
+      );
+      expect(find.text('Зберегти полички'), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
+      expect(repository.saved['f']?.placements['A'], 1);
+    },
+  );
+
+  testWidgets('opening a toy waits for the shelf save to finish', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = Shelves()..saveGate = Completer<void>();
+    var opened = 0;
+    await tester.pumpWidget(
+      screen(
+        repository,
+        onOpen: (_) async {
+          opened++;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await moveBear(tester);
+    await tester.ensureVisible(find.text('Зберегти полички'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Зберегти полички'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<ShelfCabinet>(find.byType(ShelfCabinet)).onOpen,
+      isNull,
+    );
+    repository.saveGate!.complete();
+    await tester.pumpAndSettle();
+    final target = find.byKey(const ValueKey('shelf-toy-A'));
+    await tester.ensureVisible(target);
+    await tester.pumpAndSettle();
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+    expect(
+      tester.widget<ShelfCabinet>(find.byType(ShelfCabinet)).editable,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
     'shelves render varied toys and fit a narrow phone with large text',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(320, 1500));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final key = GlobalKey();
+      File? previewFont;
+      for (final path in [
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+      ]) {
+        final candidate = File(path);
+        if (candidate.existsSync()) {
+          previewFont = candidate;
+          break;
+        }
+      }
+      if (previewFont != null)
+        await tester.runAsync(() async {
+          final loader = FontLoader('ShelfPreview')
+            ..addFont(
+              Future.value(
+                ByteData.sublistView(previewFont!.readAsBytesSync()),
+              ),
+            );
+          await loader.load();
+        });
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(
+            fontFamily: previewFont == null ? null : 'ShelfPreview',
+          ),
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(
               context,
@@ -258,12 +364,7 @@ void main() {
                 key: key,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: ShelfCabinet(
-                    items: inventory,
-                    balloons: true,
-                    flowers: true,
-                    front: 'stars',
-                  ),
+                  child: ShelfCabinet(items: inventory),
                 ),
               ),
             ),
