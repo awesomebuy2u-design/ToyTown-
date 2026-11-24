@@ -96,6 +96,11 @@ class _PetClothes extends CustomPainter {
     canvas.scale(size.width/300,size.height/300);
     final neck = kind=='bunny' ? 190.0 : kind=='cat' ? 149.0 : 139.0;
     if(outfit!='none') {
+      canvas.save();
+      // Fit the garment around the neck anchor, independently of the sprite animation.
+      canvas.translate(150, neck);
+      canvas.scale(kind == 'bunny' ? .82 : kind == 'cat' ? .91 : 1.08, kind == 'bunny' ? .88 : kind == 'cat' ? .92 : 1.0);
+      canvas.translate(-150, -neck);
       final color=outfit=='mint'?const Color(0xFF65BDA9):const Color(0xFFEE8F82);
       final shirt=Path()..moveTo(120,neck+3)..quadraticBezierTo(150,neck+20,180,neck+3)
         ..lineTo(199,neck+25)..lineTo(186,neck+42)..lineTo(178,neck+34)
@@ -107,6 +112,8 @@ class _PetClothes extends CustomPainter {
       canvas.drawPath(shirt,Paint()..color=Color.lerp(color,Colors.black,.15)!..style=PaintingStyle.stroke..strokeWidth=1.2);
       canvas.drawArc(Rect.fromLTWH(121,neck-3,58,23),0,math.pi,false,Paint()..color=Colors.white70..style=PaintingStyle.stroke..strokeWidth=3);
       _star(canvas,Offset(150,(neck+260)/2),10,const Color(0xFFFFE4A1));
+      canvas.drawLine(Offset(125,253),Offset(175,253),Paint()..color=Colors.white54..strokeWidth=1.5);
+      canvas.restore();
     }
     if(bow) {
       final y=neck+5;
