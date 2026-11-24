@@ -567,7 +567,7 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
       final stored = prefs.getStringList('$_prefix$today') ?? const <String>[];
       if (!mounted) return;
       setState(() {
-        completed.addAll(stored.where((s) => s == 'feed' || s == 'play'));
+        completed.addAll(stored.where((s) => s == 'feed' || s == 'play' || s == 'walk'));
         ready = true;
       });
     } catch (_) {
@@ -579,7 +579,7 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
     if (!ready || completed.contains(action)) return;
     setState(() {
       completed.add(action);
-      reaction = action == 'feed' ? '🐰🥕' : '🐰🎾';
+      reaction = action == 'feed' ? '🐰🥕' : action == 'play' ? '🐰🎾' : '🐰🌳';
     });
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -590,7 +590,8 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
     if (!mounted) return;
     final message = action == 'feed'
       ? 'Ням-ням! ${widget.petName} із задоволенням поїв.'
-      : 'Ура! ${widget.petName} погрався з тобою та радіє!';
+      : action == 'play' ? 'Ура! ${widget.petName} погрався з тобою та радіє!'
+      : '${widget.petName} прогулявся зеленими стежками ToyTown!';
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
@@ -604,7 +605,7 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
         const Text('🐾 Щоденні пригоди з другом',
           style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text('Сьогодні виконано ${completed.length} із 2 занять. Завтра можна грати знову.'),
+        Text('Сьогодні виконано ${completed.length} із 3 занять. Завтра можна грати знову.'),
         const SizedBox(height: 8),
         Center(child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
@@ -616,6 +617,7 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
             semanticsLabel: reaction == '🐰🥕'
               ? 'Улюбленець радіє частуванню'
               : reaction == '🐰🎾' ? 'Улюбленець грається з м’ячиком'
+              : reaction == '🐰🌳' ? 'Улюбленець гуляє містечком'
               : 'Улюбленець чекає на пригоду'),
         )),
         const SizedBox(height: 8),
@@ -634,6 +636,13 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
             icon: Icon(completed.contains('play')
               ? Icons.check_circle_rounded : Icons.sports_baseball_rounded),
             label: Text(completed.contains('play') ? 'Погралися' : 'Погратися')),
+          FilledButton.tonalIcon(
+            key: const ValueKey('village-daily-walk'),
+            onPressed: ready && !completed.contains('walk')
+              ? () => doActivity('walk') : null,
+            icon: Icon(completed.contains('walk')
+              ? Icons.check_circle_rounded : Icons.directions_walk_rounded),
+            label: Text(completed.contains('walk') ? 'Прогулялися' : 'Прогулятися')),
         ]),
       ]),
     ),
