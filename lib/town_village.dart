@@ -668,10 +668,13 @@ class _PetWalkGame extends StatefulWidget {
 
 class _PetWalkGameState extends State<_PetWalkGame> {
   int stop = 0;
+  final Set<int> collected = <int>{};
+  static const treasures = ['🌷 Квітка', '💧 Краплинка', '🍃 Листочок'];
   static const places = <String>['🌷 Квіткова галявина', '⛲ Чарівний фонтан', '🌳 Зелений парк'];
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+    scrollable: true,
     title: const Text('🐰 Прогулянка ToyTown'),
     content: Column(mainAxisSize: MainAxisSize.min, children: [
       Text('Зупинка ${stop + 1} із 3'),
@@ -687,14 +690,21 @@ class _PetWalkGameState extends State<_PetWalkGame> {
       Text(places[stop], key: const ValueKey('pet-walk-place'),
         style: const TextStyle(fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
-      const Text('Відвідай усі три місця, щоб завершити прогулянку.'),
+      Text('Зібрано ${collected.length} із 3 знахідок'),
+      const SizedBox(height: 8),
+      OutlinedButton(
+        key: const ValueKey('pet-walk-collect'),
+        onPressed: collected.contains(stop) ? null : () => setState(() => collected.add(stop)),
+        child: Text(collected.contains(stop) ? 'Знайдено!' : 'Зібрати: ${treasures[stop]}'),
+      ),
+      const Text('Збери знахідку на кожній зупинці.'),
     ]),
     actions: [
       TextButton(onPressed: () => Navigator.pop(context, false),
         child: const Text('Повернутися')),
       FilledButton(
         key: const ValueKey('pet-walk-next'),
-        onPressed: () {
+        onPressed: !collected.contains(stop) ? null : () {
           if (stop == 2) {
             Navigator.pop(context, true);
           } else {
