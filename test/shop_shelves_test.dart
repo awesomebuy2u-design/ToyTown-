@@ -277,6 +277,22 @@ void main() {
   );
 
   testWidgets(
+    'game meadow is reachable from the main world navigation',
+    (tester) async {
+      await tester.pumpWidget(MaterialApp(home: ToyTownWorld(
+        openListings: () {}, openParent: () {},
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(NavigationDestination).at(3));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('world-games-heading')), findsOneWidget);
+      expect(find.byKey(const ValueKey('world-play-memory')), findsOneWidget);
+      expect(find.textContaining('Твої зірочки:'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'failed inventory loading cannot overwrite a saved shelf layout',
     (tester) async {
       final repository = Shelves()..failLoad = true;
