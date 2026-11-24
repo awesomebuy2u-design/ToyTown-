@@ -43,6 +43,10 @@ void main() {
       await tester.pumpAndSettle();
     }
     await tester.scrollUntilVisible(find.text('Крамнички інших родин'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Крамнички інших родин'));
+    await tester.pumpAndSettle();
+    expect(find.text('Крамнички інших родин').hitTestable(), findsOneWidget);
     await tester.tap(find.text('Крамнички інших родин'));
     await tester.pumpAndSettle();
     expect(shopVisits, 1);
