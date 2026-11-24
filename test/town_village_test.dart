@@ -42,7 +42,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('village-door-toys')));
     await tester.pump(const Duration(milliseconds: 100));
     expect(opened, 0);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 800));
     expect(opened, 1);
     expect(tester.takeException(), isNull);
   });
