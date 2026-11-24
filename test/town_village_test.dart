@@ -11,6 +11,8 @@ Widget reduced(Widget child, {double scale = 1}) => MaterialApp(
     disableAnimations: true, textScaler: TextScaler.linear(scale)), child: content!),
   home: Scaffold(body: child));
 
+void _noop() {}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('each village building opens its own destination', (tester) async {
@@ -99,6 +101,25 @@ void main() {
     expect(find.text('✨ Секрети: 1/3'), findsOneWidget);
     expect(find.byKey(const ValueKey('village-explorer-badge')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('kindness quest gives a persistent one-time achievement', (tester) async {
+    Widget quest() => reduced(const SingleChildScrollView(child: PetKindnessQuest(
+      petName: 'Пухнастик', openPet: _noop)));
+    await tester.pumpWidget(quest());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('village-kindness-complete')));
+    await tester.pumpAndSettle();
+    expect(find.text('💛 Добрий друг ToyTown'), findsOneWidget);
+    await tester.tap(find.text('Чудово!'));
+    await tester.pumpAndSettle();
+    expect(find.text('🏅 Добрий друг ToyTown'), findsOneWidget);
+    expect(find.byKey(const ValueKey('village-kindness-complete')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(quest());
+    await tester.pumpAndSettle();
+    expect(find.text('🏅 Добрий друг ToyTown'), findsOneWidget);
+    expect(find.byKey(const ValueKey('village-kindness-complete')), findsNothing);
   });
 
   testWidgets('town fountain opens an adventure dialog and leads to games', (tester) async {
