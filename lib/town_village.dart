@@ -68,6 +68,35 @@ class _VillageMapState extends State<VillageMap> with SingleTickerProviderStateM
         Positioned.fill(child: ExcludeSemantics(child: CustomPaint(painter: _VillagePainter(
           motion: motion, theme: widget.theme, front: widget.front,
           balloons: widget.balloons, flowers: widget.flowers, awning: widget.awning)))),
+        Positioned.fromRect(
+          rect: Rect.fromLTWH(163 * scale, 230 * scale, 74 * scale, 57 * scale),
+          child: Semantics(
+            button: true,
+            label: 'Фонтан бажань у центрі містечка',
+            child: Material(color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey('village-fountain'),
+                borderRadius: BorderRadius.circular(30),
+                onTap: () => showDialog<void>(context: context, builder: (dialogContext) =>
+                  AlertDialog(
+                    title: const Text('⛲ Фонтан бажань'),
+                    content: const Text('Ти знайшов чарівний фонтан! У ToyTown на тебе чекають ігри, турбота про улюбленця та власна крамничка. Обери свою наступну пригоду.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text('Повернутися')),
+                      FilledButton(
+                        onPressed: widget.openGames == null ? null : () {
+                          Navigator.pop(dialogContext);
+                          widget.openGames!();
+                        },
+                        child: const Text('До ігор'),
+                      ),
+                    ],
+                  )),
+              ),
+            ),
+          ),
+        ),
         for (final place in [
           ('toys', 'Іграшки', 'Іграшковий ярмарок', const Rect.fromLTWH(15, 65, 175, 175), widget.openToys),
           ('shop', 'Крамничка', 'Моя крамничка', const Rect.fromLTWH(210, 65, 175, 175), widget.openShop),
