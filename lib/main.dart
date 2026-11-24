@@ -1,3 +1,4 @@
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -540,6 +541,53 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final title = TextEditingController(), description = TextEditingController(), city = TextEditingController();
   String category = 'Конструктори', condition = 'used', deal = 'gift';
   bool busy = false; XFile? photo;
+  final speech = stt.SpeechToText();
+  TextEditingController? dictating;
+  Future<void> dictate(TextEditingController target) async {
+    if (busy) return;
+    if (speech.isListening) {
+      await speech.stop();
+      if (mounted) setState(() => dictating = null);
+      return;
+    }
+    try {
+      final available = await speech.initialize(
+        onStatus: (status) {
+          if (mounted && (status == 'done' || status == 'notListening')) {
+            setState(() => dictating = null);
+          }
+        },
+        onError: (_) {
+          if (mounted) setState(() => dictating = null);
+        },
+      );
+      if (!mounted) return;
+      final locales = available ? await speech.locales() : <stt.LocaleName>[];
+      if (!mounted) return;
+      final ukrainian = locales.where((l) => l.localeId.toLowerCase().startsWith('uk')).toList();
+      if (!available || ukrainian.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Українське розпізнавання недоступне. Скористайся клавіатурою або її мікрофоном.')));
+        return;
+      }
+      setState(() => dictating = target);
+      final original = target.text.trim();
+      await speech.listen(localeId: ukrainian.first.localeId, onResult: (result) {
+        if (!mounted) return;
+        final value = [original, result.recognizedWords].where((s) => s.isNotEmpty).join(' ');
+        target.value = TextEditingValue(text: value, selection: TextSelection.collapsed(offset: value.length));
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => dictating = null);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не вдалося увімкнути мікрофон. Можна ввести текст вручну.')));
+      }
+    }
+  }
+  Widget mic(TextEditingController target) => IconButton(
+    tooltip: dictating == target ? 'Зупинити диктування' : 'Продиктувати українською',
+    onPressed: busy ? null : () => dictate(target),
+    icon: Icon(dictating == target ? Icons.stop_circle_outlined : Icons.mic_none),
+  );
   Future<void> pickPhoto(ImageSource source) async {
     try {
       final selected = await ImagePicker().pickImage(source: source, imageQuality: 82, maxWidth: 1400, requestFullMetadata: false);
@@ -572,21 +620,21 @@ class _AddListingScreenState extends State<AddListingScreen> {
     finally { if (mounted) setState(() => busy = false); }
   }
   @override
-  void dispose() { title.dispose(); description.dispose(); city.dispose(); super.dispose(); }
+  void dispose() { speech.cancel(); title.dispose(); description.dispose(); city.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: Text(widget.shelf == null ? 'Нова іграшка' : 'Нова іграшка · полиця ${widget.shelf! + 1}')), body: ListView(padding: const EdgeInsets.all(16), children: [
     const Text('Сфотографуй тільки іграшку, без облич, адрес чи особистих речей.'),
     const SizedBox(height: 8),
     FilledButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.camera), icon: const Icon(Icons.camera_alt_outlined), label: const Text('Сфотографувати іграшку')),
     if (photo != null) FutureBuilder(future: photo!.readAsBytes(), builder: (context, snap) => snap.hasData ? Image.memory(snap.data!, height: 160, fit: BoxFit.contain) : const SizedBox.shrink()),
-    TextField(controller: title, decoration: const InputDecoration(labelText: 'Назва іграшки', border: OutlineInputBorder())),
-    const SizedBox(height: 12), TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'Опис', border: OutlineInputBorder())),
+    TextField(controller: title, decoration: InputDecoration(labelText: 'Назва іграшки', border: const OutlineInputBorder(), suffixIcon: mic(title))),
+    const SizedBox(height: 12), TextField(controller: description, maxLines: 3, decoration: InputDecoration(labelText: 'Опис', border: const OutlineInputBorder(), suffixIcon: mic(description))),
     const SizedBox(height: 12), TextField(controller: city, decoration: const InputDecoration(labelText: 'Місто (без адреси)', border: OutlineInputBorder())),
     const SizedBox(height: 12), DropdownButtonFormField(value: category, decoration: const InputDecoration(labelText: 'Категорія'), items: ['Конструктори','Ляльки','Машинки','Настільні ігри','М’які іграшки','Інше'].map((v)=>DropdownMenuItem(value:v, child:Text(v))).toList(), onChanged:(v)=>setState(()=>category=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: condition, decoration: const InputDecoration(labelText: 'Стан'), items: const [DropdownMenuItem(value:'new', child:Text('Нова')), DropdownMenuItem(value:'used', child:Text('Вживана'))], onChanged:(v)=>setState(()=>condition=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: deal, decoration: const InputDecoration(labelText: 'Формат'), items: const [DropdownMenuItem(value:'gift', child:Text('Дарування')), DropdownMenuItem(value:'exchange', child:Text('Обмін')), DropdownMenuItem(value:'sale', child:Text('Продаж'))], onChanged:(v)=>setState(()=>deal=v!)),
     const SizedBox(height: 12), OutlinedButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.gallery), icon: const Icon(Icons.photo), label: Text(photo == null ? 'Додати фото' : 'Фото вибрано')),
-    const SizedBox(height: 8), FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Збереження…' : 'Надіслати на підтвердження')),
+    const SizedBox(height: 8), FilledButton(onPressed: busy || dictating != null ? null : save, child: Text(busy ? 'Збереження…' : 'Надіслати на підтвердження')),
     const SizedBox(height: 12), const Text('Оголошення не публікується автоматично. Воно очікує перевірки дорослим.', style: TextStyle(color: Colors.black54)),
   ]));
 }
