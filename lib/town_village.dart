@@ -101,9 +101,12 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
     final firstDiscovery = discovered.add(index);
     if (firstDiscovery) { setState(() {}); saveSecrets(); }
     final treasure = treasures[index];
+    final completedNow = firstDiscovery && discovered.length == treasures.length;
     showDialog<void>(context: context, builder: (ctx) => AlertDialog(
-      title: Text(treasure.title),
-      content: Text('${treasure.message}\n\nЗнайдено секретів: ${discovered.length} із ${treasures.length}.'),
+      title: Text(completedNow ? '🏅 Дослідник ToyTown!' : treasure.title),
+      content: Text(completedNow
+        ? 'Ти знайшов усі три секрети містечка! Вітаємо з відзнакою «Дослідник ToyTown». Вона залишиться з тобою після повторного відкриття гри.\n\nЗнайдено секретів: 3 із 3.'
+        : '${treasure.message}\n\nЗнайдено секретів: ${discovered.length} із ${treasures.length}.'),
       actions: [FilledButton(onPressed: () => Navigator.pop(ctx),
         child: const Text('Продовжити пригоду'))],
     ));
@@ -172,6 +175,19 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
             )),
           );
         }),
+        if (discovered.length == treasures.length)
+          Positioned(
+            left: 103 * scale, top: 38 * scale,
+            width: 194 * scale, height: 28 * scale,
+            child: IgnorePointer(child: DecoratedBox(
+              decoration: BoxDecoration(color: const Color(0xFFFFF1C2),
+                borderRadius: BorderRadius.circular(18)),
+              child: Center(child: Text('🏅 Дослідник ToyTown',
+                key: const ValueKey('village-explorer-badge'),
+                style: TextStyle(fontSize: 12 * scale, fontWeight: FontWeight.bold,
+                  color: const Color(0xFF77531C)))),
+            )),
+          ),
         Positioned(
           left: 116 * scale, top: 6 * scale,
           width: 170 * scale, height: 32 * scale,
