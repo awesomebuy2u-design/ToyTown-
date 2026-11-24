@@ -642,6 +642,14 @@ class _ModerationScreenState extends State<ModerationScreen> {
           final item = snap.data![i];
           return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(item['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            if (item['photo_path'] is String && (item['photo_path'] as String).isNotEmpty)
+              FutureBuilder<String>(
+                future: db!.storage.from('listing-images').createSignedUrl(item['photo_path'] as String, 60),
+                builder: (context, photo) => photo.hasData
+                  ? Image.network(photo.data!, height: 180, fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Text('Фото не завантажилося.'))
+                  : Text(photo.hasError ? 'Фото недоступне.' : 'Завантаження фото…'),
+              ),
             const SizedBox(height: 6), Text(item['description'] ?? ''),
             const SizedBox(height: 8), Wrap(spacing: 8, children: [Chip(label: Text(item['category'] ?? 'Інше')), Chip(label: Text(item['city'] ?? ''))]),
             const SizedBox(height: 8), const Text('Переконайтеся, що опис і фото не містять персональних даних дитини або домашньої адреси.', style: TextStyle(fontSize: 12, color: Colors.black54)),
