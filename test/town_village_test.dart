@@ -127,7 +127,7 @@ void main() {
       child: DailyPetActivities(petName: 'Пухнастик')));
     await tester.pumpWidget(activities());
     await tester.pumpAndSettle();
-    expect(find.textContaining('Сьогодні виконано 0 із 2'), findsOneWidget);
+    expect(find.textContaining('Сьогодні виконано 0 із 3'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-daily-feed')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('pet-reaction-🐰🥕')), findsOneWidget);
@@ -135,13 +135,18 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('village-daily-play')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('pet-reaction-🐰🎾')), findsOneWidget);
-    expect(find.textContaining('Сьогодні виконано 2 із 2'), findsOneWidget);
+    expect(find.textContaining('Сьогодні виконано 2 із 3'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('village-daily-walk')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pet-reaction-🐰🌳')), findsOneWidget);
+    expect(find.textContaining('Сьогодні виконано 3 із 3'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(activities());
     await tester.pumpAndSettle();
-    expect(find.textContaining('Сьогодні виконано 2 із 2'), findsOneWidget);
+    expect(find.textContaining('Сьогодні виконано 3 із 3'), findsOneWidget);
     expect(find.text('Нагодовано'), findsOneWidget);
     expect(find.text('Погралися'), findsOneWidget);
+    expect(find.text('Прогулялися'), findsOneWidget);
   });
 
   testWidgets('town fountain opens an adventure dialog and leads to games', (tester) async {
