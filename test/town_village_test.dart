@@ -48,6 +48,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('three village secrets can be discovered once each', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(reduced(Padding(
+      padding: const EdgeInsets.all(16),
+      child: VillageMap(openToys: () {}, openShop: () {}, openPet: () {},
+        openGames: () {}, theme: 'mint', front: 'classic',
+        balloons: false, flowers: false, awning: false),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('✨ Секрети: 0/3'), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.byKey(ValueKey('village-secret-$i')));
+      await tester.pumpAndSettle();
+      expect(find.text('Знайдено секретів: ${i + 1} із 3.'), findsOneWidget);
+      await tester.tap(find.text('Продовжити пригоду'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('✨ Секрети: 3/3'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('village-secret-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('Знайдено секретів: 3 із 3.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('town fountain opens an adventure dialog and leads to games', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
