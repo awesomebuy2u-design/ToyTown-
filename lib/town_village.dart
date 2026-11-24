@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// These buildings are destinations, not fictional listings or other families.
 class TownVillage extends StatelessWidget {
@@ -56,6 +57,35 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
   Offset destination = const Offset(200, 280);
   VoidCallback? arrival;
   final Set<int> discovered = <int>{};
+  static const _secretsKey = 'toytown.village.discovered.v1';
+  bool _secretsReady = false;
+
+  Future<void> loadSecrets() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getStringList(_secretsKey) ?? const <String>[];
+      if (!mounted) return;
+      setState(() {
+        discovered.addAll(stored.map(int.tryParse).whereType<int>()
+          .where((value) => value >= 0 && value < treasures.length));
+        _secretsReady = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _secretsReady = true);
+    }
+  }
+
+  Future<void> saveSecrets() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final sorted = discovered.toList()..sort();
+      await prefs.setStringList(_secretsKey,
+        sorted.map((value) => value.toString()).toList());
+    } catch (_) {
+      // The adventure remains playable even if device storage is unavailable.
+    }
+  }
+
   static const treasures = <({Offset position, String title, String message})>[
     (position: Offset(40, 251), title: 'Метелик дружби',
       message: 'Метелик прилетів привітатися! Ти знайшов перший секрет містечка.'),
@@ -67,8 +97,9 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
   bool get walking => walk.isAnimating;
 
   void discover(int index) {
-    if (walking) return;
-    setState(() => discovered.add(index));
+    if (walking || !_secretsReady) return;
+    final firstDiscovery = discovered.add(index);
+    if (firstDiscovery) { setState(() {}); saveSecrets(); }
     final treasure = treasures[index];
     showDialog<void>(context: context, builder: (ctx) => AlertDialog(
       title: Text(treasure.title),
@@ -101,6 +132,7 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     walk.addStatusListener(onWalkStatus);
+    loadSecrets();
   }
   @override
   void didChangeDependencies() {
