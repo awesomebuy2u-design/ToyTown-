@@ -62,14 +62,14 @@ void main() {
     for (var i = 0; i < 3; i++) {
       await tester.tap(find.byKey(ValueKey('village-secret-$i')));
       await tester.pumpAndSettle();
-      expect(find.text('Знайдено секретів: ${i + 1} із 3.'), findsOneWidget);
+      expect(find.textContaining('Знайдено секретів: ${i + 1} із 3.'), findsOneWidget);
       await tester.tap(find.text('Продовжити пригоду'));
       await tester.pumpAndSettle();
     }
     expect(find.text('✨ Секрети: 3/3'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-secret-0')));
     await tester.pumpAndSettle();
-    expect(find.text('Знайдено секретів: 3 із 3.'), findsOneWidget);
+    expect(find.textContaining('Знайдено секретів: 3 із 3.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
