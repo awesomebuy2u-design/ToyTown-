@@ -14,13 +14,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ToyTownWorld extends StatefulWidget {
   const ToyTownWorld({super.key, required this.openListings, required this.openParent, this.openShops,
-    this.openMyListings, this.openChats, this.openOwnListing, this.client});
+    this.openMyListings, this.openChats, this.openOwnListing, this.addShelfToy, this.client});
   final SupabaseClient? client;
   final VoidCallback openListings;
   final VoidCallback openParent;
   final VoidCallback? openShops;
   final VoidCallback? openMyListings, openChats;
   final Future<void> Function(Listing)? openOwnListing;
+  final Future<void> Function(int)? addShelfToy;
 
   @override
   State<ToyTownWorld> createState() => _ToyTownWorldState();
@@ -507,7 +508,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
               repository: online && familyId != null ? SupabaseShopShelvesRepository(widget.client!) : null,
               familyId: familyId, demo: !online, theme: shopTheme, front: shopFront,
               balloons: decorated, flowers: flowers, awning: awning,
-              onOpen: widget.openOwnListing, onManage: widget.openMyListings),
+              onOpen: widget.openOwnListing, onManage: widget.openMyListings, onAdd: widget.addShelfToy),
             const SizedBox(height:12),
             shopThemes(),
             const SizedBox(height: 12),
