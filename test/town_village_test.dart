@@ -122,6 +122,26 @@ void main() {
     expect(find.byKey(const ValueKey('village-kindness-complete')), findsNothing);
   });
 
+  testWidgets('daily pet activities persist and cannot repeat on same day', (tester) async {
+    Widget activities() => reduced(const SingleChildScrollView(
+      child: DailyPetActivities(petName: 'Пухнастик')));
+    await tester.pumpWidget(activities());
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Сьогодні виконано 0 із 2'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('village-daily-feed')));
+    await tester.pumpAndSettle();
+    expect(find.text('Нагодовано'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('village-daily-play')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Сьогодні виконано 2 із 2'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(activities());
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Сьогодні виконано 2 із 2'), findsOneWidget);
+    expect(find.text('Нагодовано'), findsOneWidget);
+    expect(find.text('Погралися'), findsOneWidget);
+  });
+
   testWidgets('town fountain opens an adventure dialog and leads to games', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
