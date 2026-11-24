@@ -55,7 +55,28 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
   Offset start = const Offset(200, 280);
   Offset destination = const Offset(200, 280);
   VoidCallback? arrival;
+  final Set<int> discovered = <int>{};
+  static const treasures = <({Offset position, String title, String message})>[
+    (position: Offset(40, 251), title: 'Метелик дружби',
+      message: 'Метелик прилетів привітатися! Ти знайшов перший секрет містечка.'),
+    (position: Offset(361, 251), title: 'Чарівна квітка',
+      message: 'Квітка розквітла! У ToyTown навіть маленькі відкриття — це пригода.'),
+    (position: Offset(200, 464), title: 'Зоряний камінчик',
+      message: 'Ти відкрив останній секрет! Усі три скарби містечка знайдено.'),
+  ];
   bool get walking => walk.isAnimating;
+
+  void discover(int index) {
+    if (walking) return;
+    setState(() => discovered.add(index));
+    final treasure = treasures[index];
+    showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+      title: Text(treasure.title),
+      content: Text('${treasure.message}\n\nЗнайдено секретів: ${discovered.length} із ${treasures.length}.'),
+      actions: [FilledButton(onPressed: () => Navigator.pop(ctx),
+        child: const Text('Продовжити пригоду'))],
+    ));
+  }
 
   void visit(Offset target, VoidCallback? action) {
     if (action == null || walking) return;
@@ -119,6 +140,40 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
             )),
           );
         }),
+        Positioned(
+          left: 116 * scale, top: 6 * scale,
+          width: 170 * scale, height: 32 * scale,
+          child: IgnorePointer(child: DecoratedBox(
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: .94),
+              borderRadius: BorderRadius.circular(18)),
+            child: Center(child: Text('✨ Секрети: ${discovered.length}/3',
+              key: const ValueKey('village-secret-progress'),
+              style: TextStyle(fontSize: 13 * scale, fontWeight: FontWeight.w700,
+                color: const Color(0xFF65518A)))),
+          )),
+        ),
+        for (var i = 0; i < treasures.length; i++)
+          Positioned(
+            left: (treasures[i].position.dx - 17) * scale,
+            top: (treasures[i].position.dy - 17) * scale,
+            width: 34 * scale, height: 34 * scale,
+            child: Semantics(button: true, label: treasures[i].title,
+              child: Material(color: Colors.transparent,
+                child: InkWell(
+                  key: ValueKey('village-secret-$i'),
+                  onTap: () => discover(i),
+                  borderRadius: BorderRadius.circular(18),
+                  child: Center(child: Icon(
+                    discovered.contains(i) ? Icons.check_circle_rounded
+                      : (i == 0 ? Icons.flutter_dash_rounded
+                        : i == 1 ? Icons.local_florist_rounded : Icons.star_rounded),
+                    size: 23 * scale,
+                    color: discovered.contains(i) ? const Color(0xFF458B77)
+                      : const Color(0xFFE1A452),
+                  )),
+                ),
+              )),
+          ),
         Positioned.fromRect(
           rect: Rect.fromLTWH(163 * scale, 230 * scale, 74 * scale, 57 * scale),
           child: Semantics(
