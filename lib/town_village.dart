@@ -103,17 +103,19 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
           final position = Offset.lerp(start, destination, Curves.easeInOut.transform(walk.value))!;
           final point = walk.isAnimating ? position : traveler;
           return Positioned(
-            left: (point.dx - 15) * scale,
-            top: (point.dy - 36) * scale,
-            width: 30 * scale, height: 42 * scale,
+            left: (point.dx - 22) * scale,
+            top: (point.dy - 49 - (walk.isAnimating ? math.sin(walk.value * math.pi * 8).abs() * 4 : 0)) * scale,
+            width: 44 * scale, height: 52 * scale,
             child: IgnorePointer(child: Semantics(
-              label: 'Персонаж мандрує містечком',
-              child: Column(children: [
-                Icon(Icons.face_rounded, size: 27 * scale, color: const Color(0xFF8B6DB7)),
-                Container(width: 16 * scale, height: 12 * scale,
-                  decoration: BoxDecoration(color: const Color(0xFFEEA78F),
-                    borderRadius: BorderRadius.circular(8 * scale))),
-              ]),
+              label: 'Пухнастий мандрівник іде до будиночка',
+              child: CustomPaint(
+                key: const ValueKey('village-traveler'),
+                painter: _TravelerPainter(
+                  walking: walk.isAnimating,
+                  step: walk.value,
+                  facingRight: destination.dx >= start.dx,
+                ),
+              ),
             )),
           );
         }),
@@ -291,4 +293,49 @@ class _VillagePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _VillagePainter old) => old.theme != theme || old.front != front ||
     old.balloons != balloons || old.flowers != flowers || old.awning != awning || old.motion != motion;
+}
+
+/// A small original illustrated animal companion, drawn without extra assets.
+class _TravelerPainter extends CustomPainter {
+  const _TravelerPainter({required this.walking, required this.step, required this.facingRight});
+  final bool walking, facingRight;
+  final double step;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 44, size.height / 52);
+    if (!facingRight) {
+      canvas.translate(44, 0);
+      canvas.scale(-1, 1);
+    }
+    final fur = Paint()..color = const Color(0xFFF1B78B);
+    final ear = Paint()..color = const Color(0xFFE58F9D);
+    final outline = Paint()..color = const Color(0xFF715B67);
+    final bounce = walking ? math.sin(step * math.pi * 8) * 2 : 0.0;
+    canvas.drawOval(const Rect.fromLTWH(8, 44, 28, 5), Paint()..color = const Color(0xFF618B74).withValues(alpha: .20));
+    canvas.translate(0, -bounce);
+    canvas.drawOval(const Rect.fromLTWH(10, 23, 24, 23), fur);
+    final stride = walking ? math.sin(step * math.pi * 8) * 3 : 0.0;
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(12 + stride, 40, 8, 9), const Radius.circular(4)), fur);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(24 - stride, 40, 8, 9), const Radius.circular(4)), fur);
+    canvas.drawOval(const Rect.fromLTWH(5, 4, 13, 24), fur);
+    canvas.drawOval(const Rect.fromLTWH(26, 4, 13, 24), fur);
+    canvas.drawOval(const Rect.fromLTWH(9, 8, 6, 15), ear);
+    canvas.drawOval(const Rect.fromLTWH(30, 8, 6, 15), ear);
+    canvas.drawCircle(const Offset(22, 25), 17, fur);
+    canvas.drawOval(const Rect.fromLTWH(14, 27, 16, 11), Paint()..color = const Color(0xFFFFE5CF));
+    canvas.drawCircle(const Offset(16, 23), 2, outline);
+    canvas.drawCircle(const Offset(28, 23), 2, outline);
+    canvas.drawCircle(const Offset(22, 29), 2.5, outline);
+    final scarf = Path()..moveTo(9, 37)..quadraticBezierTo(22, 42, 35, 37)
+      ..lineTo(34, 41)..quadraticBezierTo(22, 46, 10, 41)..close();
+    canvas.drawPath(scarf, Paint()..color = const Color(0xFF8875CB));
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _TravelerPainter oldDelegate) =>
+      oldDelegate.walking != walking || oldDelegate.step != step ||
+      oldDelegate.facingRight != facingRight;
 }
