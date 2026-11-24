@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toytown/town_village.dart';
 
 Widget reduced(Widget child, {double scale = 1}) => MaterialApp(
@@ -11,6 +12,7 @@ Widget reduced(Widget child, {double scale = 1}) => MaterialApp(
   home: Scaffold(body: child));
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('each village building opens its own destination', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -70,6 +72,30 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('village-secret-0')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Знайдено секретів: 3 із 3.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('discovered secrets survive reopening the village', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    Widget village() => reduced(Padding(
+      padding: const EdgeInsets.all(16),
+      child: VillageMap(openToys: () {}, openShop: () {}, openPet: () {},
+        openGames: () {}, theme: 'mint', front: 'classic',
+        balloons: false, flowers: false, awning: false),
+    ));
+    await tester.pumpWidget(village());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('village-secret-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Продовжити пригоду'));
+    await tester.pumpAndSettle();
+    expect(find.text('✨ Секрети: 1/3'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(village());
+    await tester.pumpAndSettle();
+    expect(find.text('✨ Секрети: 1/3'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
