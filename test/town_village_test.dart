@@ -69,6 +69,7 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(find.text('✨ Секрети: 3/3'), findsOneWidget);
+    expect(find.byKey(const ValueKey('village-explorer-badge')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-secret-0')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Знайдено секретів: 3 із 3.'), findsOneWidget);
@@ -96,6 +97,7 @@ void main() {
     await tester.pumpWidget(village());
     await tester.pumpAndSettle();
     expect(find.text('✨ Секрети: 1/3'), findsOneWidget);
+    expect(find.byKey(const ValueKey('village-explorer-badge')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
