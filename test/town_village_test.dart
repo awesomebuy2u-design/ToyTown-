@@ -130,9 +130,11 @@ void main() {
     expect(find.textContaining('Сьогодні виконано 0 із 2'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-daily-feed')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pet-reaction-🐰🥕')), findsOneWidget);
     expect(find.text('Нагодовано'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-daily-play')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pet-reaction-🐰🎾')), findsOneWidget);
     expect(find.textContaining('Сьогодні виконано 2 із 2'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(activities());
