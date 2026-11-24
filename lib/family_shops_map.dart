@@ -165,10 +165,9 @@ class _FamilyShopsMapScreenState extends State<FamilyShopsMapScreen> {
                 child: Semantics(button: true, label: '${city.label}: крамничок ${city.shops.length}',
                   child: Tooltip(message: '${city.label} · ${city.shops.length}', child: Material(
                     color: selectedCity == city.place.id ? const Color(0xFF286F61) : const Color(0xFF6C63D9),
-                    shape: const CircleBorder(), child: InkWell(customBorder: const CircleBorder(),
+                    borderRadius: BorderRadius.circular(14), child: InkWell(borderRadius: BorderRadius.circular(14),
                       key: ValueKey('map-city-${city.place.id}'), onTap: () => selectCity(city),
-                      child: Center(child: Text('${city.shops.length}',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))))))),
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.storefront_rounded, color: Colors.white, size: 24), Text('${city.shops.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))]))))),
               )]),
               const RichAttributionWidget(attributions: [TextSourceAttribution('OpenStreetMap contributors')]),
             ],
