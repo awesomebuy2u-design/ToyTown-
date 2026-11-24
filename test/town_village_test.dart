@@ -20,6 +20,7 @@ void main() {
       openPet: () => opened.add('pet'), openGames: () => opened.add('games'),
       theme: 'mint', front: 'classic', balloons: false, flowers: false, awning: false))));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('village-traveler')), findsOneWidget);
     for (final destination in ['toys', 'shop', 'pet', 'games']) {
       await tester.tap(find.byKey(ValueKey('village-door-$destination')));
       await tester.pumpAndSettle();
