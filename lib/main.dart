@@ -883,9 +883,30 @@ class _AgreementsScreenState extends State<AgreementsScreen> {
   void initState() { super.initState(); future = loadAgreements(); }
   Future<List<Map<String,dynamic>>> loadAgreements() async {
     final rows = await db!.from('exchange_agreements').select('id,conversation_id,listing_id,proposer_family,receiver_family,created_by,status,note,proposer_confirmed_at,receiver_confirmed_at,created_at').order('created_at', ascending:false);
-    return List<Map<String,dynamic>>.from(rows);
+    final hidden = await db!.rpc('my_hidden_exchange_agreements');
+    final hiddenIds = (hidden as List).map((row) => row['agreement_id'].toString()).toSet();
+    return List<Map<String,dynamic>>.from(rows)
+        .where((row) => !hiddenIds.contains(row['id'].toString())).toList();
   }
   Future<void> refresh() async => setState(() { future = loadAgreements(); });
+  Future<void> hideAgreement(String id) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Прибрати угоду зі списку?'),
+      content: const Text('Угода зникне лише з вашого списку. В іншої родини вона залишиться. Дані про передачу не видаляються.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Назад')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Прибрати')),
+      ],
+    ));
+    if (confirmed != true) return;
+    try {
+      await db!.rpc('hide_own_exchange_agreement', params: {'target_agreement': id});
+      await refresh();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не вдалося прибрати угоду: $e')));
+    }
+  }
   Future<void> act(String id, String rpc) async {
     final confirmed = await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:Text(rpc=='cancel_exchange_agreement'?'Скасувати домовленість?':rpc=='confirm_exchange_handover'?'Іграшку передано?':'Підтвердити дію?'),content:Text(rpc=='confirm_exchange_handover'?'Підтверджуйте лише фактичну передачу. Після підтвердження обома родинами оголошення зникне з каталогу.':'Зміна стане видимою іншій родині.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Назад')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Підтвердити'))]));
     if(confirmed!=true)return;
@@ -900,7 +921,7 @@ class _AgreementsScreenState extends State<AgreementsScreen> {
     final rows=snap.data!;
     return RefreshIndicator(onRefresh:refresh,child:rows.isEmpty
       ? ListView(children:const [SizedBox(height:110),EmptyState(icon:Icons.handshake_outlined,title:'Домовленостей ще немає',subtitle:'У приватному чаті натисніть значок рукостискання, щоб надіслати пропозицію.')])
-      : ListView(padding:const EdgeInsets.all(16),children:[const Text('Домовленості родини',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),const SizedBox(height:6),const Text('Підтверджуйте передачу лише після фактичної зустрічі дорослих у безпечному громадському місці.'),const SizedBox(height:14),...rows.map((a){final status=a['status'] as String;final mine=a['created_by']==db!.auth.currentUser!.id;return Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Icon(Icons.handshake_outlined,color:Color(0xFF6C63D9)),const SizedBox(width:8),Expanded(child:Text(statusLabel(status),style:const TextStyle(fontWeight:FontWeight.bold)))]),const SizedBox(height:8),Text(a['note']??'Домовленість щодо іграшки'),const SizedBox(height:6),Text('Створено: ${a['created_at'].toString().substring(0,10)}',style:const TextStyle(color:Colors.black54,fontSize:12)),if(status=='proposed'&&!mine) Align(alignment:Alignment.centerRight,child:Wrap(spacing:8,children:[TextButton(onPressed:()=>act(a['id'].toString(),'reject_exchange_agreement'),child:const Text('Відхилити')),FilledButton(onPressed:()=>act(a['id'].toString(),'accept_exchange_agreement'),child:const Text('Погодити'))])),if(status=='accepted'&&((mine&&a['proposer_confirmed_at']==null)||(!mine&&a['receiver_confirmed_at']==null))) Align(alignment:Alignment.centerRight,child:FilledButton.tonal(onPressed:()=>act(a['id'].toString(),'confirm_exchange_handover'),child:const Text('Підтвердити передачу'))),if((status=='proposed'||status=='accepted')&&a['proposer_confirmed_at']==null&&a['receiver_confirmed_at']==null) TextButton(onPressed:()=>act(a['id'].toString(),'cancel_exchange_agreement'),child:const Text('Скасувати домовленість')),if(status=='accepted') Text('Підтвердження: ${a['proposer_confirmed_at']==null?'ініціатор — очікується':'ініціатор — так'}; ${a['receiver_confirmed_at']==null?'інша родина — очікується':'інша родина — так'}',style:const TextStyle(fontSize:12,color:Colors.black54))])));})]));
+      : ListView(padding:const EdgeInsets.all(16),children:[const Text('Домовленості родини',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),const SizedBox(height:6),const Text('Підтверджуйте передачу лише після фактичної зустрічі дорослих у безпечному громадському місці.'),const SizedBox(height:14),...rows.map((a){final status=a['status'] as String;final mine=a['created_by']==db!.auth.currentUser!.id;return Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Icon(Icons.handshake_outlined,color:Color(0xFF6C63D9)),const SizedBox(width:8),Expanded(child:Text(statusLabel(status),style:const TextStyle(fontWeight:FontWeight.bold)))]),const SizedBox(height:8),Text(a['note']??'Домовленість щодо іграшки'),const SizedBox(height:6),Text('Створено: ${a['created_at'].toString().substring(0,10)}',style:const TextStyle(color:Colors.black54,fontSize:12)),if(status=='proposed'&&!mine) Align(alignment:Alignment.centerRight,child:Wrap(spacing:8,children:[TextButton(onPressed:()=>act(a['id'].toString(),'reject_exchange_agreement'),child:const Text('Відхилити')),FilledButton(onPressed:()=>act(a['id'].toString(),'accept_exchange_agreement'),child:const Text('Погодити'))])),if(status=='accepted'&&((mine&&a['proposer_confirmed_at']==null)||(!mine&&a['receiver_confirmed_at']==null))) Align(alignment:Alignment.centerRight,child:FilledButton.tonal(onPressed:()=>act(a['id'].toString(),'confirm_exchange_handover'),child:const Text('Підтвердити передачу'))),if((status=='proposed'||status=='accepted')&&a['proposer_confirmed_at']==null&&a['receiver_confirmed_at']==null) TextButton(onPressed:()=>act(a['id'].toString(),'cancel_exchange_agreement'),child:const Text('Скасувати домовленість')),if(const ['completed','cancelled','rejected'].contains(status)) Align(alignment:Alignment.centerRight,child:TextButton.icon(key:ValueKey('hide-agreement-${a['id']}'),onPressed:()=>hideAgreement(a['id'].toString()),icon:const Icon(Icons.delete_outline),label:const Text('Прибрати зі списку'))),if(status=='accepted') Text('Підтвердження: ${a['proposer_confirmed_at']==null?'ініціатор — очікується':'ініціатор — так'}; ${a['receiver_confirmed_at']==null?'інша родина — очікується':'інша родина — так'}',style:const TextStyle(fontSize:12,color:Colors.black54))])));})]));
   });
 }
 
