@@ -29,6 +29,7 @@ class _FamilyShopsMapScreenState extends State<FamilyShopsMapScreen> {
   int generation = 0, offset = 0, tileAttempt = 0;
   int? selectedCity;
   bool loading = true, loadingMore = false, more = false, failedAppend = false;
+  bool listOnly = false;
   bool tileError = false, tileErrorQueued = false, mapReady = false;
 
   @override
@@ -111,6 +112,7 @@ class _FamilyShopsMapScreenState extends State<FamilyShopsMapScreen> {
     for (final city in cities) {
       if (city.place.id == selectedCity) selected = city;
     }
+    final suggestions = search.text.trim() == activeTerm ? <String>[] : index?.suggest(search.text) ?? <String>[];
     final visible = selected?.shops.values.toList() ?? items;
     final located = {for (final city in cities) ...city.shops.keys};
     return SafeArea(child: RefreshIndicator(
@@ -124,10 +126,19 @@ class _FamilyShopsMapScreenState extends State<FamilyShopsMapScreen> {
           const Text('Позначки показують центри міст і сіл, без точних адрес родин. Натисни на позначку або назву міста, щоб обрати крамничку.'),
           const SizedBox(height: 12),
           TextField(key: const ValueKey('map-search'), controller: search, maxLength: 100,
-            textInputAction: TextInputAction.search, onSubmitted: (_) => load(),
+            textInputAction: TextInputAction.search, onChanged: (_) => setState(() {}), onSubmitted: (_) => load(),
             decoration: InputDecoration(labelText: 'Місто, село або назва крамнички',
               border: const OutlineInputBorder(), suffixIcon: IconButton(
                 tooltip: 'Шукати на мапі', onPressed: () => load(), icon: const Icon(Icons.search)))),
+          if (suggestions.isNotEmpty) Wrap(spacing: 8, runSpacing: 4, children: [
+            for (final name in suggestions) ActionChip(label: Text(name), onPressed: () {
+              search.text = name;
+              FocusScope.of(context).unfocus();
+              final place = index?.resolve(name);
+              if (place != null && mapReady && !listOnly) map.move(place.point, 9);
+              load();
+            }),
+          ]),
           Wrap(spacing: 8, children: [
             TextButton.icon(onPressed: () {
               search.clear(); load();
@@ -136,7 +147,9 @@ class _FamilyShopsMapScreenState extends State<FamilyShopsMapScreen> {
             TextButton.icon(onPressed: () => load(refresh: true),
               icon: const Icon(Icons.refresh), label: const Text('Оновити крамнички')),
           ]),
-          SizedBox(height: 280, child: ClipRRect(borderRadius: BorderRadius.circular(20), child: FlutterMap(
+          SegmentedButton<bool>(segments: const [ButtonSegment(value: false, label: Text('На карті'), icon: Icon(Icons.map_outlined)), ButtonSegment(value: true, label: Text('Списком'), icon: Icon(Icons.list))], selected: {listOnly}, onSelectionChanged: (value) => setState(() { listOnly = value.first; if (listOnly) mapReady = false; })),
+          const SizedBox(height: 8),
+          if (!listOnly) SizedBox(height: (MediaQuery.sizeOf(context).height * .48).clamp(280.0, 520.0).toDouble(), child: ClipRRect(borderRadius: BorderRadius.circular(20), child: FlutterMap(
             mapController: map,
             options: MapOptions(initialCameraFit: CameraFit.bounds(
                 bounds: LatLngBounds(const LatLng(44, 22), const LatLng(52.5, 40.5)),
