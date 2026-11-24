@@ -575,6 +575,15 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
     }
   }
 
+  Future<void> startWalk() async {
+    if (!ready || completed.contains('walk')) return;
+    final finished = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _PetWalkGame(),
+    );
+    if (finished == true && mounted) await doActivity('walk');
+  }
+
   Future<void> doActivity(String action) async {
     if (!ready || completed.contains(action)) return;
     setState(() {
@@ -639,12 +648,60 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
           FilledButton.tonalIcon(
             key: const ValueKey('village-daily-walk'),
             onPressed: ready && !completed.contains('walk')
-              ? () => doActivity('walk') : null,
+              ? startWalk : null,
             icon: Icon(completed.contains('walk')
               ? Icons.check_circle_rounded : Icons.directions_walk_rounded),
             label: Text(completed.contains('walk') ? 'Прогулялися' : 'Прогулятися')),
         ]),
       ]),
     ),
+  );
+}
+
+/// A three-stop walking game: leaving early does not complete the daily quest.
+class _PetWalkGame extends StatefulWidget {
+  const _PetWalkGame();
+
+  @override
+  State<_PetWalkGame> createState() => _PetWalkGameState();
+}
+
+class _PetWalkGameState extends State<_PetWalkGame> {
+  int stop = 0;
+  static const places = <String>['🌷 Квіткова галявина', '⛲ Чарівний фонтан', '🌳 Зелений парк'];
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('🐰 Прогулянка ToyTown'),
+    content: Column(mainAxisSize: MainAxisSize.min, children: [
+      Text('Зупинка ${stop + 1} із 3'),
+      const SizedBox(height: 12),
+      AnimatedAlign(
+        alignment: stop == 0 ? Alignment.centerLeft
+          : stop == 1 ? Alignment.center : Alignment.centerRight,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        child: const Text('🐰', style: TextStyle(fontSize: 48)),
+      ),
+      const SizedBox(height: 12),
+      Text(places[stop], key: const ValueKey('pet-walk-place'),
+        style: const TextStyle(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      const Text('Відвідай усі три місця, щоб завершити прогулянку.'),
+    ]),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context, false),
+        child: const Text('Повернутися')),
+      FilledButton(
+        key: const ValueKey('pet-walk-next'),
+        onPressed: () {
+          if (stop == 2) {
+            Navigator.pop(context, true);
+          } else {
+            setState(() => stop++);
+          }
+        },
+        child: Text(stop == 2 ? 'Завершити прогулянку' : 'Далі стежкою')),
+    ],
   );
 }
