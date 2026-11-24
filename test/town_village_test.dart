@@ -28,6 +28,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('traveler reaches the selected building before opening it', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var opened = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Padding(
+      padding: const EdgeInsets.all(16),
+      child: VillageMap(openToys: () => opened++, openShop: () {},
+        openPet: () {}, openGames: () {}, theme: 'mint', front: 'classic',
+        balloons: false, flowers: false, awning: false),
+    ))));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('village-door-toys')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(opened, 0);
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('town fountain opens an adventure dialog and leads to games', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
