@@ -53,7 +53,7 @@ class SupabaseShopShelvesRepository implements ShopShelvesRepository {
         .from('listings')
         .select()
         .eq('family_id', familyId)
-        .eq('status', 'approved')
+        .inFilter('status', ['approved', 'pending'])
         .isFilter('deleted_at', null)
         .order('created_at', ascending: false)
         .order('id')
@@ -105,6 +105,7 @@ class ShelfCabinet extends StatelessWidget {
     this.editable = false,
     this.onMove,
     this.onAdd,
+    this.showPending = false,
     this.onOpen,
     this.loadPhoto,
   });
@@ -114,6 +115,7 @@ class ShelfCabinet extends StatelessWidget {
   final bool balloons, flowers, awning, editable;
   final void Function(String, int)? onMove;
   final ValueChanged<int>? onAdd;
+  final bool showPending;
   final ValueChanged<Listing>? onOpen;
   final Future<String> Function(String)? loadPhoto;
 
@@ -129,6 +131,11 @@ class ShelfCabinet extends StatelessWidget {
             onTap: onOpen == null ? null : () => onOpen!(item),
             loadPhoto: loadPhoto,
           ),
+          if (showPending && item.status == 'pending')
+            const Padding(
+              padding: EdgeInsets.all(4),
+              child: Text('Очікує підтвердження', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Color(0xFF805A18))),
+            ),
           if (editable)
             PopupMenuButton<int>(
               key: ValueKey('move-toy-${item.id}'),
@@ -744,7 +751,8 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
           ),
         ],
         ShelfCabinet(
-          items: shown,
+          items: preview && !widget.demo ? shown.where((item) => item.status == 'approved').toList() : shown,
+          showPending: !preview && !widget.demo,
           layout: layout,
           theme: widget.theme,
           front: widget.front,
