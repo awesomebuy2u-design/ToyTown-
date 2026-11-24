@@ -48,8 +48,39 @@ class VillageMap extends StatefulWidget {
   State<VillageMap> createState() => _VillageMapState();
 }
 
-class _VillageMapState extends State<VillageMap> with SingleTickerProviderStateMixin {
+class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
   late final motion = AnimationController(vsync: this, duration: const Duration(seconds: 4));
+  late final walk = AnimationController(vsync: this, duration: const Duration(milliseconds: 750));
+  Offset traveler = const Offset(200, 280);
+  Offset start = const Offset(200, 280);
+  Offset destination = const Offset(200, 280);
+  VoidCallback? arrival;
+  bool get walking => walk.isAnimating;
+
+  void visit(Offset target, VoidCallback? action) {
+    if (action == null || walking) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      action();
+      return;
+    }
+    start = traveler;
+    destination = target;
+    arrival = action;
+    walk.forward(from: 0);
+  }
+
+  void onWalkStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    setState(() => traveler = destination);
+    final callback = arrival;
+    arrival = null;
+    callback?.call();
+  }
+  @override
+  void initState() {
+    super.initState();
+    walk.addStatusListener(onWalkStatus);
+  }
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -57,7 +88,7 @@ class _VillageMapState extends State<VillageMap> with SingleTickerProviderStateM
     else if (!motion.isAnimating) { motion.repeat(); }
   }
   @override
-  void dispose() { motion.dispose(); super.dispose(); }
+  void dispose() { walk.removeStatusListener(onWalkStatus); walk.dispose(); motion.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) => AspectRatio(aspectRatio: 400 / 480,
@@ -68,6 +99,24 @@ class _VillageMapState extends State<VillageMap> with SingleTickerProviderStateM
         Positioned.fill(child: ExcludeSemantics(child: CustomPaint(painter: _VillagePainter(
           motion: motion, theme: widget.theme, front: widget.front,
           balloons: widget.balloons, flowers: widget.flowers, awning: widget.awning)))),
+        AnimatedBuilder(animation: walk, builder: (context, child) {
+          final position = Offset.lerp(start, destination, Curves.easeInOut.transform(walk.value))!;
+          final point = walk.isAnimating ? position : traveler;
+          return Positioned(
+            left: (point.dx - 15) * scale,
+            top: (point.dy - 36) * scale,
+            width: 30 * scale, height: 42 * scale,
+            child: IgnorePointer(child: Semantics(
+              label: 'Персонаж мандрує містечком',
+              child: Column(children: [
+                Icon(Icons.face_rounded, size: 27 * scale, color: const Color(0xFF8B6DB7)),
+                Container(width: 16 * scale, height: 12 * scale,
+                  decoration: BoxDecoration(color: const Color(0xFFEEA78F),
+                    borderRadius: BorderRadius.circular(8 * scale))),
+              ]),
+            )),
+          );
+        }),
         Positioned.fromRect(
           rect: Rect.fromLTWH(163 * scale, 230 * scale, 74 * scale, 57 * scale),
           child: Semantics(
@@ -106,7 +155,9 @@ class _VillageMapState extends State<VillageMap> with SingleTickerProviderStateM
           place.$4.width * scale, place.$4.height * scale),
           child: Semantics(button: true, label: place.$3, enabled: place.$5 != null,
             child: Material(color: Colors.transparent, child: InkWell(
-              key: ValueKey('village-door-${place.$1}'), onTap: place.$5,
+              key: ValueKey('village-door-${place.$1}'),
+              onTap: place.$5 == null ? null : () => visit(
+                Offset(place.$4.center.dx, place.$4.bottom - 28), place.$5),
               borderRadius: BorderRadius.circular(22),
               child: Align(alignment: Alignment.bottomCenter,
                 child: Padding(padding: EdgeInsets.only(bottom: 4 * scale),
