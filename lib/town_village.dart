@@ -548,6 +548,7 @@ class DailyPetActivities extends StatefulWidget {
 class _DailyPetActivitiesState extends State<DailyPetActivities> {
   static const _prefix = 'toytown.pet.daily.v1.';
   bool ready = false;
+  String reaction = '🐰';
   final Set<String> completed = <String>{};
   String get today {
     final now = DateTime.now().toLocal();
@@ -576,7 +577,10 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
 
   Future<void> doActivity(String action) async {
     if (!ready || completed.contains(action)) return;
-    setState(() => completed.add(action));
+    setState(() {
+      completed.add(action);
+      reaction = action == 'feed' ? '🐰🥕' : '🐰🎾';
+    });
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('$_prefix$today', completed.toList()..sort());
@@ -601,6 +605,19 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
           style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text('Сьогодні виконано ${completed.length} із 2 занять. Завтра можна грати знову.'),
+        const SizedBox(height: 8),
+        Center(child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          transitionBuilder: (child, animation) => ScaleTransition(
+            scale: CurvedAnimation(parent: animation, curve: Curves.elasticOut),
+            child: FadeTransition(opacity: animation, child: child)),
+          child: Text(reaction, key: ValueKey('pet-reaction-$reaction'),
+            style: const TextStyle(fontSize: 42),
+            semanticsLabel: reaction == '🐰🥕'
+              ? 'Улюбленець радіє частуванню'
+              : reaction == '🐰🎾' ? 'Улюбленець грається з м’ячиком'
+              : 'Улюбленець чекає на пригоду'),
+        )),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 6, children: [
           FilledButton.tonalIcon(
