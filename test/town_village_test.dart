@@ -28,6 +28,27 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('town fountain opens an adventure dialog and leads to games', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var games = 0;
+    await tester.pumpWidget(reduced(Padding(
+      padding: const EdgeInsets.all(16),
+      child: VillageMap(openToys: () {}, openShop: () {}, openPet: () {},
+        openGames: () => games++, theme: 'mint', front: 'classic',
+        balloons: false, flowers: false, awning: false),
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('village-fountain')));
+    await tester.pumpAndSettle();
+    expect(find.text('⛲ Фонтан бажань'), findsOneWidget);
+    await tester.tap(find.text('До ігор'));
+    await tester.pumpAndSettle();
+    expect(games, 1);
+    expect(find.text('⛲ Фонтан бажань'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('large text keeps destinations usable and pending games disabled', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
