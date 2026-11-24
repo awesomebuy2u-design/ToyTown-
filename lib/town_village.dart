@@ -547,7 +547,9 @@ class DailyPetActivities extends StatefulWidget {
 
 class _DailyPetActivitiesState extends State<DailyPetActivities> {
   static const _prefix = 'toytown.pet.daily.v1.';
+  static const _collectionKey = 'toytown.pet.walk.collection.v1';
   bool ready = false;
+  bool hasCollection = false;
   String reaction = '🐰';
   final Set<String> completed = <String>{};
   String get today {
@@ -568,6 +570,7 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
       if (!mounted) return;
       setState(() {
         completed.addAll(stored.where((s) => s == 'feed' || s == 'play' || s == 'walk'));
+        hasCollection = prefs.getBool(_collectionKey) ?? false;
         ready = true;
       });
     } catch (_) {
@@ -588,11 +591,13 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
     if (!ready || completed.contains(action)) return;
     setState(() {
       completed.add(action);
+      if (action == 'walk') hasCollection = true;
       reaction = action == 'feed' ? '🐰🥕' : action == 'play' ? '🐰🎾' : '🐰🌳';
     });
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('$_prefix$today', completed.toList()..sort());
+      if (action == 'walk') await prefs.setBool(_collectionKey, true);
     } catch (_) {
       // Keep play available when storage is temporarily unavailable.
     }
@@ -629,6 +634,29 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
               : reaction == '🐰🌳' ? 'Улюбленець гуляє містечком'
               : 'Улюбленець чекає на пригоду'),
         )),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          key: const ValueKey('pet-walk-collection'),
+          onPressed: ready ? () => showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              scrollable: true,
+              title: const Text('Колекція знахідок'),
+              content: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(hasCollection ? 'Зібрано 3 із 3 предметів' : 'Зібрано 0 із 3 предметів'),
+                const SizedBox(height: 8),
+                for (final item in ['🌷 Квітка', '💧 Краплинка', '🍃 Листочок'])
+                  ListTile(
+                    leading: Icon(hasCollection ? Icons.check_circle_outline : Icons.lock_outline),
+                    title: Text(hasCollection ? item : 'Невідкрита знахідка'),
+                  ),
+              ]),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрити'))],
+            ),
+          ) : null,
+          icon: const Icon(Icons.collections_bookmark_outlined),
+          label: const Text('Моя колекція'),
+        ),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 6, children: [
           FilledButton.tonalIcon(
