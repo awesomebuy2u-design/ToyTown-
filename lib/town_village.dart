@@ -22,6 +22,8 @@ class TownVillage extends StatelessWidget {
       flowers: flowers, awning: awning),
     const SizedBox(height: 12),
     PetKindnessQuest(petName: petName, openPet: openPet),
+    const SizedBox(height: 8),
+    DailyPetActivities(petName: petName),
     const SizedBox(height: 16),
     Text('Куди підемо?', style: Theme.of(context).textTheme.titleLarge),
     const SizedBox(height: 8),
@@ -528,6 +530,93 @@ class _PetKindnessQuestState extends State<PetKindnessQuest> {
           OutlinedButton(
             onPressed: widget.openPet,
             child: const Text('До улюбленця')),
+        ]),
+      ]),
+    ),
+  );
+}
+
+/// Daily, device-local pet activities; never modifies purchasable star balances.
+class DailyPetActivities extends StatefulWidget {
+  const DailyPetActivities({super.key, required this.petName});
+  final String petName;
+
+  @override
+  State<DailyPetActivities> createState() => _DailyPetActivitiesState();
+}
+
+class _DailyPetActivitiesState extends State<DailyPetActivities> {
+  static const _prefix = 'toytown.pet.daily.v1.';
+  bool ready = false;
+  final Set<String> completed = <String>{};
+  String get today {
+    final now = DateTime.now().toLocal();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getStringList('$_prefix$today') ?? const <String>[];
+      if (!mounted) return;
+      setState(() {
+        completed.addAll(stored.where((s) => s == 'feed' || s == 'play'));
+        ready = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => ready = true);
+    }
+  }
+
+  Future<void> doActivity(String action) async {
+    if (!ready || completed.contains(action)) return;
+    setState(() => completed.add(action));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('$_prefix$today', completed.toList()..sort());
+    } catch (_) {
+      // Keep play available when storage is temporarily unavailable.
+    }
+    if (!mounted) return;
+    final message = action == 'feed'
+      ? 'Ням-ням! ${widget.petName} із задоволенням поїв.'
+      : 'Ура! ${widget.petName} погрався з тобою та радіє!';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+    key: const ValueKey('village-daily-pet'),
+    color: const Color(0xFFE8F7F1),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('🐾 Щоденні пригоди з другом',
+          style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text('Сьогодні виконано ${completed.length} із 2 занять. Завтра можна грати знову.'),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 6, children: [
+          FilledButton.tonalIcon(
+            key: const ValueKey('village-daily-feed'),
+            onPressed: ready && !completed.contains('feed')
+              ? () => doActivity('feed') : null,
+            icon: Icon(completed.contains('feed')
+              ? Icons.check_circle_rounded : Icons.restaurant_rounded),
+            label: Text(completed.contains('feed') ? 'Нагодовано' : 'Нагодувати')),
+          FilledButton.tonalIcon(
+            key: const ValueKey('village-daily-play'),
+            onPressed: ready && !completed.contains('play')
+              ? () => doActivity('play') : null,
+            icon: Icon(completed.contains('play')
+              ? Icons.check_circle_rounded : Icons.sports_baseball_rounded),
+            label: Text(completed.contains('play') ? 'Погралися' : 'Погратися')),
         ]),
       ]),
     ),
