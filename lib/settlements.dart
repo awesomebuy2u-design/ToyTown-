@@ -33,6 +33,19 @@ class SettlementIndex {
   static Future<SettlementIndex> load() async => SettlementIndex.fromRows(
       jsonDecode(await rootBundle.loadString('assets/places/ukraine.json')) as List);
 
+  List<String> suggest(String input, {int limit = 8}) {
+    final term = normalizeSettlement(input);
+    if (term.length < 2) return [];
+    final matches = _names.keys.where((name) => name.startsWith(term) &&
+        RegExp('[а-яіїєґ]').hasMatch(name)).toList()
+      ..sort((a, b) {
+        final byLength = a.length.compareTo(b.length);
+        return byLength != 0 ? byLength : a.compareTo(b);
+      });
+    return matches.take(limit).map((name) =>
+        name[0].toUpperCase() + name.substring(1)).toList();
+  }
+
   Settlement? resolve(String city) {
     final candidates = _names[normalizeSettlement(city)]?.values.toList() ?? [];
     if (candidates.length == 1) return candidates.single;
