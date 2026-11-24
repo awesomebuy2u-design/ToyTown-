@@ -20,6 +20,8 @@ class TownVillage extends StatelessWidget {
     VillageMap(openToys: openToys, openShop: openShop, openPet: openPet,
       openGames: openGames, theme: theme, front: front, balloons: balloons,
       flowers: flowers, awning: awning),
+    const SizedBox(height: 12),
+    PetKindnessQuest(petName: petName, openPet: openPet),
     const SizedBox(height: 16),
     Text('Куди підемо?', style: Theme.of(context).textTheme.titleLarge),
     const SizedBox(height: 8),
@@ -441,4 +443,93 @@ class _TravelerPainter extends CustomPainter {
   bool shouldRepaint(covariant _TravelerPainter oldDelegate) =>
       oldDelegate.walking != walking || oldDelegate.step != step ||
       oldDelegate.facingRight != facingRight;
+}
+
+/// A gentle, one-time companion quest. This is a cosmetic achievement:
+/// it does not mint marketplace stars or modify the protected wallet.
+class PetKindnessQuest extends StatefulWidget {
+  const PetKindnessQuest({super.key, required this.petName, required this.openPet});
+  final String petName;
+  final VoidCallback openPet;
+
+  @override
+  State<PetKindnessQuest> createState() => _PetKindnessQuestState();
+}
+
+class _PetKindnessQuestState extends State<PetKindnessQuest> {
+  static const _questKey = 'toytown.quest.kindness.v1';
+  bool _ready = false;
+  bool _completed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _completed = prefs.getBool(_questKey) ?? false;
+        _ready = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _ready = true);
+    }
+  }
+
+  Future<void> _complete() async {
+    if (!_ready || _completed) return;
+    setState(() => _completed = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_questKey, true);
+    } catch (_) {
+      // The quest can still be enjoyed when local storage is unavailable.
+    }
+    if (!mounted) return;
+    await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('💛 Добрий друг ToyTown'),
+      content: Text('Ти подбав про ${widget.petName}! Тепер у твоїй колекції є відзнака доброти.'),
+      actions: [FilledButton(onPressed: () => Navigator.pop(ctx),
+        child: const Text('Чудово!'))],
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+    key: const ValueKey('village-kindness-quest'),
+    color: const Color(0xFFFFF3DE),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(_completed ? Icons.workspace_premium_rounded : Icons.favorite_rounded,
+            color: const Color(0xFFB76D69)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(_completed ? '🏅 Добрий друг ToyTown'
+            : 'Завдання: подбай про друга',
+            style: const TextStyle(fontWeight: FontWeight.bold))),
+        ]),
+        const SizedBox(height: 4),
+        Text(_completed
+          ? '${widget.petName} відчуває твою турботу. Відзнаку збережено!'
+          : 'Подаруй ${widget.petName} трохи уваги та отримай відзнаку доброти.'),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          if (!_completed)
+            FilledButton.icon(
+              key: const ValueKey('village-kindness-complete'),
+              onPressed: _ready ? _complete : null,
+              icon: const Icon(Icons.favorite_outline_rounded),
+              label: const Text('Погладити друга')),
+          OutlinedButton(
+            onPressed: widget.openPet,
+            child: const Text('До улюбленця')),
+        ]),
+      ]),
+    ),
+  );
 }
