@@ -542,6 +542,28 @@ class _AddListingScreenState extends State<AddListingScreen> {
   String category = 'Конструктори', condition = 'used', deal = 'gift';
   bool busy = false; XFile? photo;
   final speech = stt.SpeechToText();
+  bool loadingCity = true;
+  @override
+  void initState() {
+    super.initState();
+    loadCity();
+  }
+  Future<void> loadCity() async {
+    try {
+      final client = db;
+      final user = client?.auth.currentUser;
+      if (client == null || user == null) return;
+      final row = await client.from('family_members').select('families(city)').eq('user_id', user.id).maybeSingle();
+      final family = row?['families'];
+      if (mounted && family is Map && city.text.isEmpty) {
+        city.text = (family['city'] ?? '').toString();
+      }
+    } catch (_) {
+      // Manual city entry remains available.
+    } finally {
+      if (mounted) setState(() => loadingCity = false);
+    }
+  }
   TextEditingController? dictating;
   Future<void> dictate(TextEditingController target) async {
     if (busy) return;
@@ -629,12 +651,12 @@ class _AddListingScreenState extends State<AddListingScreen> {
     if (photo != null) FutureBuilder(future: photo!.readAsBytes(), builder: (context, snap) => snap.hasData ? Image.memory(snap.data!, height: 160, fit: BoxFit.contain) : const SizedBox.shrink()),
     TextField(controller: title, decoration: InputDecoration(labelText: 'Назва іграшки', border: const OutlineInputBorder(), suffixIcon: mic(title))),
     const SizedBox(height: 12), TextField(controller: description, maxLines: 3, decoration: InputDecoration(labelText: 'Опис', border: const OutlineInputBorder(), suffixIcon: mic(description))),
-    const SizedBox(height: 12), TextField(controller: city, decoration: const InputDecoration(labelText: 'Місто (без адреси)', border: OutlineInputBorder())),
+    const SizedBox(height: 12), TextField(controller: city, enabled: !loadingCity && !busy, decoration: InputDecoration(labelText: 'Місто (без адреси)', border: const OutlineInputBorder(), helperText: loadingCity ? 'Завантажуємо місто родини…' : 'Місто з профілю родини')),
     const SizedBox(height: 12), DropdownButtonFormField(value: category, decoration: const InputDecoration(labelText: 'Категорія'), items: ['Конструктори','Ляльки','Машинки','Настільні ігри','М’які іграшки','Інше'].map((v)=>DropdownMenuItem(value:v, child:Text(v))).toList(), onChanged:(v)=>setState(()=>category=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: condition, decoration: const InputDecoration(labelText: 'Стан'), items: const [DropdownMenuItem(value:'new', child:Text('Нова')), DropdownMenuItem(value:'used', child:Text('Вживана'))], onChanged:(v)=>setState(()=>condition=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: deal, decoration: const InputDecoration(labelText: 'Формат'), items: const [DropdownMenuItem(value:'gift', child:Text('Дарування')), DropdownMenuItem(value:'exchange', child:Text('Обмін')), DropdownMenuItem(value:'sale', child:Text('Продаж'))], onChanged:(v)=>setState(()=>deal=v!)),
     const SizedBox(height: 12), OutlinedButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.gallery), icon: const Icon(Icons.photo), label: Text(photo == null ? 'Додати фото' : 'Фото вибрано')),
-    const SizedBox(height: 8), FilledButton(onPressed: busy || dictating != null ? null : save, child: Text(busy ? 'Збереження…' : 'Надіслати на підтвердження')),
+    const SizedBox(height: 8), FilledButton(onPressed: busy || loadingCity || dictating != null ? null : save, child: Text(busy ? 'Збереження…' : 'Показати батькам')),
     const SizedBox(height: 12), const Text('Оголошення не публікується автоматично. Воно очікує перевірки дорослим.', style: TextStyle(color: Colors.black54)),
   ]));
 }
