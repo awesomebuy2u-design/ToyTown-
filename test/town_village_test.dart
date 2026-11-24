@@ -165,6 +165,14 @@ void main() {
     expect(find.text('Нагодовано'), findsOneWidget);
     expect(find.text('Погралися'), findsOneWidget);
     expect(find.text('Прогулялися'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('pet-walk-collection')));
+    await tester.pumpAndSettle();
+    expect(find.text('Зібрано 3 із 3 предметів'), findsOneWidget);
+    expect(find.text('🌷 Квітка'), findsOneWidget);
+    expect(find.text('💧 Краплинка'), findsOneWidget);
+    expect(find.text('🍃 Листочок'), findsOneWidget);
+    await tester.tap(find.text('Закрити'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('leaving pet walk early does not complete daily quest', (tester) async {
