@@ -57,6 +57,9 @@ class WorldScreen extends StatelessWidget {
     openShops: () => openOnline(context, 0, shops: true),
     openMyListings: () => openOnline(context, 1),
     openChats: () => openOnline(context, 5),
+    addShelfToy: (shelf) async {
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AddListingScreen(shelf: shelf)));
+    },
     openOwnListing: (item) async {
       await Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => ListingDetails(
         item: item, canContact: false,
@@ -528,7 +531,8 @@ class StatusChip extends StatelessWidget {
 }
 
 class AddListingScreen extends StatefulWidget {
-  const AddListingScreen({super.key});
+  const AddListingScreen({super.key, this.shelf});
+  final int? shelf;
   @override
   State<AddListingScreen> createState() => _AddListingScreenState();
 }
@@ -536,7 +540,14 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final title = TextEditingController(), description = TextEditingController(), city = TextEditingController();
   String category = 'Конструктори', condition = 'used', deal = 'gift';
   bool busy = false; XFile? photo;
-  Future<void> pickPhoto() async { photo = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1400); setState(() {}); }
+  Future<void> pickPhoto(ImageSource source) async {
+    try {
+      final selected = await ImagePicker().pickImage(source: source, imageQuality: 82, maxWidth: 1400, requestFullMetadata: false);
+      if (mounted && selected != null) setState(() => photo = selected);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не вдалося відкрити фото. Перевірте дозвіл камери або оберіть фото з галереї.')));
+    }
+  }
   Future<void> save() async {
     if (title.text.trim().isEmpty || city.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вкажіть назву і місто.'))); return; }
     setState(() => busy = true);
@@ -563,14 +574,18 @@ class _AddListingScreenState extends State<AddListingScreen> {
   @override
   void dispose() { title.dispose(); description.dispose(); city.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Нова іграшка')), body: ListView(padding: const EdgeInsets.all(16), children: [
+  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: Text(widget.shelf == null ? 'Нова іграшка' : 'Нова іграшка · полиця ${widget.shelf! + 1}')), body: ListView(padding: const EdgeInsets.all(16), children: [
+    const Text('Сфотографуй тільки іграшку, без облич, адрес чи особистих речей.'),
+    const SizedBox(height: 8),
+    FilledButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.camera), icon: const Icon(Icons.camera_alt_outlined), label: const Text('Сфотографувати іграшку')),
+    if (photo != null) FutureBuilder(future: photo!.readAsBytes(), builder: (context, snap) => snap.hasData ? Image.memory(snap.data!, height: 160, fit: BoxFit.contain) : const SizedBox.shrink()),
     TextField(controller: title, decoration: const InputDecoration(labelText: 'Назва іграшки', border: OutlineInputBorder())),
     const SizedBox(height: 12), TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'Опис', border: OutlineInputBorder())),
     const SizedBox(height: 12), TextField(controller: city, decoration: const InputDecoration(labelText: 'Місто (без адреси)', border: OutlineInputBorder())),
     const SizedBox(height: 12), DropdownButtonFormField(value: category, decoration: const InputDecoration(labelText: 'Категорія'), items: ['Конструктори','Ляльки','Машинки','Настільні ігри','М’які іграшки','Інше'].map((v)=>DropdownMenuItem(value:v, child:Text(v))).toList(), onChanged:(v)=>setState(()=>category=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: condition, decoration: const InputDecoration(labelText: 'Стан'), items: const [DropdownMenuItem(value:'new', child:Text('Нова')), DropdownMenuItem(value:'used', child:Text('Вживана'))], onChanged:(v)=>setState(()=>condition=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: deal, decoration: const InputDecoration(labelText: 'Формат'), items: const [DropdownMenuItem(value:'gift', child:Text('Дарування')), DropdownMenuItem(value:'exchange', child:Text('Обмін')), DropdownMenuItem(value:'sale', child:Text('Продаж'))], onChanged:(v)=>setState(()=>deal=v!)),
-    const SizedBox(height: 12), OutlinedButton.icon(onPressed: pickPhoto, icon: const Icon(Icons.photo), label: Text(photo == null ? 'Додати фото' : 'Фото вибрано')),
+    const SizedBox(height: 12), OutlinedButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.gallery), icon: const Icon(Icons.photo), label: Text(photo == null ? 'Додати фото' : 'Фото вибрано')),
     const SizedBox(height: 8), FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Збереження…' : 'Надіслати на підтвердження')),
     const SizedBox(height: 12), const Text('Оголошення не публікується автоматично. Воно очікує перевірки дорослим.', style: TextStyle(color: Colors.black54)),
   ]));
