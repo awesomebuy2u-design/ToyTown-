@@ -414,6 +414,12 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
               openPet: () => showTab(1), openGames: ready && !saving && !gameOpen ? playMemoryGame : null,
               theme: shopTheme, front: shopFront, balloons: decorated, flowers: flowers,
               awning: awning, petName: petName),
+            FilledButton.icon(
+              key: const ValueKey('world-open-games'),
+              onPressed: () => showTab(3),
+              icon: const Icon(Icons.sports_esports_rounded),
+              label: const Text('У світ ігор · грати зараз'),
+            ),
             const SizedBox(height: 12),
             if (widget.openMyListings != null) FilledButton.icon(
               key: const ValueKey('open-my-listings'), onPressed: widget.openMyListings,
@@ -445,6 +451,49 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
               onPressed: !ready || saving || !canCare || legacyProgress != null ? null : care,
               child: Text(!canCare ? 'Наступний догляд завтра' : 'Подбати про улюбленця · +3 ⭐'),
             ),
+          ] : tab == 3 ? [
+            Text('Ігрова галявина', key: const ValueKey('world-games-heading'),
+              style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFFFE6AD), Color(0xFFD6F4E8)]),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Column(children: [
+                const Icon(Icons.extension_rounded, size: 84, color: Color(0xFF8065B7)),
+                const SizedBox(height: 12),
+                Text('Пригоди разом із $petName',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                const Text('Відкривай картки, шукай однакові іграшки та збирай зірочки!',
+                  textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  key: const ValueKey('world-play-memory'),
+                  onPressed: ready && !saving && !gameOpen ? playMemoryGame : null,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Грати у «Знайди пару»'),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            Card(child: ListTile(
+              leading: const Icon(Icons.stars_rounded, color: Color(0xFFE3A83C)),
+              title: Text('Твої зірочки: $stars'),
+              subtitle: Text(online
+                ? 'За першу перемогу дня можна отримати бонусну зірочку.'
+                : 'Увійди в родину, щоб зберігати нагороди.'),
+            )),
+            Card(child: ListTile(
+              leading: const Icon(Icons.pets_rounded, color: Color(0xFF629E8D)),
+              title: const Text('Завітати до улюбленця'),
+              subtitle: const Text('Доглядай, одягай і прикрашай свого друга'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showTab(1),
+            )),
           ] : [
             Text('Моя крамничка', key: const ValueKey('world-shop-heading'), style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height:12),
@@ -485,6 +534,7 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Містечко'),
           NavigationDestination(icon: Icon(Icons.pets), label: 'Улюбленець'),
           NavigationDestination(icon: Icon(Icons.storefront), label: 'Крамничка'),
+          NavigationDestination(icon: Icon(Icons.extension_rounded), label: 'Ігри'),
         ],
       ),
     );
