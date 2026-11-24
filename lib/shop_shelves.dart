@@ -104,6 +104,7 @@ class ShelfCabinet extends StatelessWidget {
     this.awning = false,
     this.editable = false,
     this.onMove,
+    this.onAdd,
     this.onOpen,
     this.loadPhoto,
   });
@@ -112,6 +113,7 @@ class ShelfCabinet extends StatelessWidget {
   final String theme, front;
   final bool balloons, flowers, awning, editable;
   final void Function(String, int)? onMove;
+  final ValueChanged<int>? onAdd;
   final ValueChanged<Listing>? onOpen;
   final Future<String> Function(String)? loadPhoto;
 
@@ -278,6 +280,13 @@ class ShelfCabinet extends StatelessWidget {
                           textAlign: TextAlign.center,
                         ),
                       ),
+                    ),
+                  if (onAdd != null)
+                    OutlinedButton.icon(
+                      key: ValueKey('shelf-add-$shelf'),
+                      onPressed: () => onAdd!(shelf),
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: const Text('Додати іграшку'),
                     ),
                   Wrap(
                     alignment: WrapAlignment.spaceEvenly,
@@ -539,6 +548,7 @@ class OwnShopShelves extends StatefulWidget {
     this.awning = false,
     this.onOpen,
     this.onManage,
+    this.onAdd,
     this.demo = false,
   });
   final ShopShelvesRepository? repository;
@@ -547,6 +557,7 @@ class OwnShopShelves extends StatefulWidget {
   final bool balloons, flowers, awning, demo;
   final Future<void> Function(Listing)? onOpen;
   final VoidCallback? onManage;
+  final Future<void> Function(int)? onAdd;
   @override
   State<OwnShopShelves> createState() => _OwnShopShelvesState();
 }
@@ -742,6 +753,11 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
           awning: widget.awning,
           editable: connected && !loading && !busy && !preview && error == null,
           onMove: move,
+          onAdd: connected && !loading && !busy && !preview && !widget.demo && widget.onAdd != null
+              ? (shelf) async {
+                  await widget.onAdd!(shelf);
+                  if (mounted) await load();
+                } : null,
           loadPhoto: widget.repository?.photo,
           onOpen:
               widget.demo ||
