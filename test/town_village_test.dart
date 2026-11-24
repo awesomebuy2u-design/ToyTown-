@@ -138,6 +138,15 @@ void main() {
     expect(find.textContaining('Сьогодні виконано 2 із 3'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-daily-walk')));
     await tester.pumpAndSettle();
+    expect(find.text('Зупинка 1 із 3'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('pet-walk-next')));
+    await tester.pumpAndSettle();
+    expect(find.text('Зупинка 2 із 3'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('pet-walk-next')));
+    await tester.pumpAndSettle();
+    expect(find.text('Зупинка 3 із 3'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('pet-walk-next')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('pet-reaction-🐰🌳')), findsOneWidget);
     expect(find.textContaining('Сьогодні виконано 3 із 3'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -147,6 +156,18 @@ void main() {
     expect(find.text('Нагодовано'), findsOneWidget);
     expect(find.text('Погралися'), findsOneWidget);
     expect(find.text('Прогулялися'), findsOneWidget);
+  });
+
+  testWidgets('leaving pet walk early does not complete daily quest', (tester) async {
+    await tester.pumpWidget(reduced(const SingleChildScrollView(
+      child: DailyPetActivities(petName: 'Пухнастик'))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('village-daily-walk')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Повернутися'));
+    await tester.pumpAndSettle();
+    expect(find.text('Прогулятися'), findsOneWidget);
+    expect(find.textContaining('Сьогодні виконано 0 із 3'), findsOneWidget);
   });
 
   testWidgets('town fountain opens an adventure dialog and leads to games', (tester) async {
