@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -113,7 +114,23 @@ class GuardianEntry extends StatefulWidget {
   @override
   State<GuardianEntry> createState() => _GuardianEntryState();
 }
-class _GuardianEntryState extends State<GuardianEntry> {
+class _GuardianEntryState extends State<GuardianEntry> with WidgetsBindingObserver {
+  Timer? idleTimer;
+  @override
+  void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); }
+  void lock() {
+    idleTimer?.cancel();
+    if (mounted) setState(() => verified = false);
+  }
+  void activity() {
+    if (!verified) return;
+    idleTimer?.cancel();
+    idleTimer = Timer(const Duration(minutes: 5), lock);
+  }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) lock();
+  }
   final password = TextEditingController();
   bool verified = false, busy = false;
   String? error;
@@ -131,6 +148,7 @@ class _GuardianEntryState extends State<GuardianEntry> {
         verified = response.user?.id == user?.id && response.session != null;
         if (!verified) error = 'Доступ не підтверджено';
       });
+      activity();
     } catch (_) {
       if (mounted) setState(() => error = 'Не вдалося підтвердити доступ');
     } finally {
@@ -141,10 +159,11 @@ class _GuardianEntryState extends State<GuardianEntry> {
     }
   }
   @override
-  void dispose() { password.dispose(); super.dispose(); }
+  void dispose() { idleTimer?.cancel(); WidgetsBinding.instance.removeObserver(this); password.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) {
-    if (verified) return HomeShell(initialTab: widget.initialTab);
+    if (verified) return Listener(onPointerDown: (_) => activity(),
+      onPointerMove: (_) => activity(), child: HomeShell(initialTab: widget.initialTab));
     return Scaffold(appBar: AppBar(title: const Text('Кабінет батьків')),
       body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
