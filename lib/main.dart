@@ -101,9 +101,63 @@ class AuthGate extends StatelessWidget {
       final session = db!.auth.currentSession;
       return session == null ? const AuthScreen() : shops
         ? FamilyShopsScreen(repository: SupabaseFamilyShopsRepository(db!), listingBuilder: (item) => ListingCard(item: item))
-        : HomeShell(initialTab: initialTab);
+        : GuardianEntry(initialTab: initialTab, key: ValueKey(session.user.id));
     },
   );
+}
+
+// Interim UI gate: server-side role enforcement remains necessary.
+class GuardianEntry extends StatefulWidget {
+  const GuardianEntry({super.key, required this.initialTab});
+  final int initialTab;
+  @override
+  State<GuardianEntry> createState() => _GuardianEntryState();
+}
+class _GuardianEntryState extends State<GuardianEntry> {
+  final password = TextEditingController();
+  bool verified = false, busy = false;
+  String? error;
+  Future<void> verify() async {
+    if (busy || password.text.isEmpty) return;
+    final user = db!.auth.currentUser;
+    final email = user?.email;
+    if (email == null) return;
+    setState(() { busy = true; error = null; });
+    try {
+      final response = await db!.auth.signInWithPassword(
+        email: email, password: password.text);
+      if (!mounted) return;
+      setState(() {
+        verified = response.user?.id == user?.id && response.session != null;
+        if (!verified) error = 'Доступ не підтверджено';
+      });
+    } catch (_) {
+      if (mounted) setState(() => error = 'Не вдалося підтвердити доступ');
+    } finally {
+      if (mounted) {
+        password.clear();
+        setState(() => busy = false);
+      }
+    }
+  }
+  @override
+  void dispose() { password.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    if (verified) return HomeShell(initialTab: widget.initialTab);
+    return Scaffold(appBar: AppBar(title: const Text('Кабінет батьків')),
+      body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.lock_outline, size: 48),
+          const Text('Підтвердьте пароль дорослого'),
+          TextField(controller: password, obscureText: true, enabled: !busy,
+            decoration: InputDecoration(labelText: 'Пароль', errorText: error),
+            onSubmitted: (_) => verify()),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: busy ? null : verify,
+            child: const Text('Підтвердити')),
+        ]))));
+  }
 }
 
 class AuthScreen extends StatefulWidget {
