@@ -116,9 +116,11 @@ class GuardianEntry extends StatefulWidget {
 }
 class _GuardianEntryState extends State<GuardianEntry> with WidgetsBindingObserver {
   Timer? idleTimer;
+  int verificationGeneration = 0;
   @override
   void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); }
   void lock() {
+    verificationGeneration++;
     idleTimer?.cancel();
     if (mounted) setState(() => verified = false);
   }
@@ -136,6 +138,7 @@ class _GuardianEntryState extends State<GuardianEntry> with WidgetsBindingObserv
   String? error;
   Future<void> verify() async {
     if (busy || password.text.isEmpty) return;
+    final generation = ++verificationGeneration;
     final user = db!.auth.currentUser;
     final email = user?.email;
     if (email == null) return;
@@ -143,7 +146,8 @@ class _GuardianEntryState extends State<GuardianEntry> with WidgetsBindingObserv
     try {
       final response = await db!.auth.signInWithPassword(
         email: email, password: password.text);
-      if (!mounted) return;
+      if (!mounted || generation != verificationGeneration ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
       setState(() {
         verified = response.user?.id == user?.id && response.session != null;
         if (!verified) error = 'Доступ не підтверджено';
