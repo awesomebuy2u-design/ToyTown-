@@ -25,8 +25,7 @@ try {
     'test/sql/clear_conversation.sql',
     'test/sql/guardian_fixture.sql',
     'supabase/migrations/20261124100000_hide_completed_agreements.sql',
-    'supabase/migrations/20261126060442_marketplace_completion.sql',
-    'supabase/migrations/20261126060446_guardian_sessions.sql',
+    'supabase/migrations/20261127055516_toytown_1_0_16_guardian_marketplace.sql',
     'test/sql/guardian_marketplace.sql',
   ]) {
     try {
