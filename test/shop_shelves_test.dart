@@ -271,7 +271,7 @@ void main() {
       expect(find.byType(ShelfCabinet), findsOneWidget);
       await tester.tap(find.byTooltip('Про ToyTown'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('1.0.15'), findsOneWidget);
+      expect(find.textContaining('1.0.16'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

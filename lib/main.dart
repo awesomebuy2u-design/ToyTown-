@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,6 +9,11 @@ import 'family_shops.dart';
 import 'family_shops_map.dart';
 import 'content_actions.dart';
 import 'app_version.dart';
+import 'guardian_portal.dart';
+import 'partner_offers_screen.dart';
+import 'settlements.dart';
+
+SupabaseClient apiFor(BuildContext context) => GuardianScope.of(context)?.client ?? db!;
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -18,7 +21,7 @@ const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+    await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
   }
   runApp(const ToyTownApp());
 }
@@ -45,16 +48,16 @@ class ToyTownApp extends StatelessWidget {
 class WorldScreen extends StatelessWidget {
   const WorldScreen({super.key});
 
-  void openOnline(BuildContext context, int tab, {bool shops = false}) {
+  void openOnline(BuildContext context, int tab, {bool shops = false, bool browsing = false}) {
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => hasBackend ? AuthGate(initialTab: tab, shops: shops) : const SetupScreen(),
+      builder: (_) => hasBackend ? AuthGate(initialTab: tab, shops: shops, browsing: browsing) : const SetupScreen(),
     ));
   }
 
   @override
   Widget build(BuildContext context) => ToyTownWorld(
     client: db,
-    openListings: () => openOnline(context, 0),
+    openListings: () => openOnline(context, 0, browsing: true),
     openParent: () => openOnline(context, 4),
     openShops: () => openOnline(context, 0, shops: true),
     openMyListings: () => openOnline(context, 1),
@@ -64,8 +67,7 @@ class WorldScreen extends StatelessWidget {
     },
     openOwnListing: (item) async {
       await Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => ListingDetails(
-        item: item, canContact: false,
-        onDelete: () async { await db!.rpc('delete_own_listing', params: {'target_listing': item.id}); },
+        item: item, canContact: false, readOnly: true,
       )));
     },
   );
@@ -92,95 +94,28 @@ class SetupScreen extends StatelessWidget {
 }
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key, this.initialTab = 0, this.shops = false});
+  const AuthGate({super.key, this.initialTab = 0, this.shops = false, this.browsing = false});
   final int initialTab;
-  final bool shops;
+  final bool shops, browsing;
   @override
   Widget build(BuildContext context) => StreamBuilder<AuthState>(
     stream: db!.auth.onAuthStateChange,
     builder: (context, snapshot) {
       final session = db!.auth.currentSession;
-      return session == null ? const AuthScreen() : shops
-        ? FamilyShopsScreen(repository: SupabaseFamilyShopsRepository(db!), listingBuilder: (item) => ListingCard(item: item))
-        : GuardianEntry(initialTab: initialTab, key: ValueKey(session.user.id));
+      if (session == null) return const AuthScreen();
+      if (shops) return FamilyShopsScreen(repository: SupabaseFamilyShopsRepository(db!),
+        listingBuilder: (item) => ListingCard(item: item, readOnly: true));
+      if (browsing) return Scaffold(appBar: AppBar(title: const Text('Ярмарок іграшок')),
+        body: const CatalogScreen(readOnly: true));
+      return GuardianPortal(key: ValueKey(session.user.id), account: db!, url: supabaseUrl,
+        publishableKey: supabaseAnonKey,
+        scopedClient: (token) => SupabaseClient(supabaseUrl, supabaseAnonKey,
+          headers: {'x-toytown-guardian': token},
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+          accessToken: () async => db!.auth.currentSession?.accessToken),
+        home: (_) => HomeShell(initialTab: initialTab));
     },
   );
-}
-
-// Interim UI gate: server-side role enforcement remains necessary.
-class GuardianEntry extends StatefulWidget {
-  const GuardianEntry({super.key, required this.initialTab});
-  final int initialTab;
-  @override
-  State<GuardianEntry> createState() => _GuardianEntryState();
-}
-class _GuardianEntryState extends State<GuardianEntry> with WidgetsBindingObserver {
-  Timer? idleTimer;
-  int verificationGeneration = 0;
-  @override
-  void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); }
-  void lock() {
-    verificationGeneration++;
-    idleTimer?.cancel();
-    if (mounted) setState(() => verified = false);
-  }
-  void activity() {
-    if (!verified) return;
-    idleTimer?.cancel();
-    idleTimer = Timer(const Duration(minutes: 5), lock);
-  }
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) lock();
-  }
-  final password = TextEditingController();
-  bool verified = false, busy = false;
-  String? error;
-  Future<void> verify() async {
-    if (busy || password.text.isEmpty) return;
-    final generation = ++verificationGeneration;
-    final user = db!.auth.currentUser;
-    final email = user?.email;
-    if (email == null) return;
-    setState(() { busy = true; error = null; });
-    try {
-      final response = await db!.auth.signInWithPassword(
-        email: email, password: password.text);
-      if (!mounted || generation != verificationGeneration ||
-          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) return;
-      setState(() {
-        verified = response.user?.id == user?.id && response.session != null;
-        if (!verified) error = 'Доступ не підтверджено';
-      });
-      activity();
-    } catch (_) {
-      if (mounted) setState(() => error = 'Не вдалося підтвердити доступ');
-    } finally {
-      if (mounted) {
-        password.clear();
-        setState(() => busy = false);
-      }
-    }
-  }
-  @override
-  void dispose() { idleTimer?.cancel(); WidgetsBinding.instance.removeObserver(this); password.dispose(); super.dispose(); }
-  @override
-  Widget build(BuildContext context) {
-    if (verified) return Listener(onPointerDown: (_) => activity(),
-      onPointerMove: (_) => activity(), child: HomeShell(initialTab: widget.initialTab));
-    return Scaffold(appBar: AppBar(title: const Text('Кабінет батьків')),
-      body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.lock_outline, size: 48),
-          const Text('Підтвердьте пароль дорослого'),
-          TextField(controller: password, obscureText: true, enabled: !busy,
-            decoration: InputDecoration(labelText: 'Пароль', errorText: error),
-            onSubmitted: (_) => verify()),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: busy ? null : verify,
-            child: const Text('Підтвердити')),
-        ]))));
-  }
 }
 
 class AuthScreen extends StatefulWidget {
@@ -192,17 +127,23 @@ class _AuthScreenState extends State<AuthScreen> {
   final email = TextEditingController();
   final password = TextEditingController();
   bool register = false, busy = false;
+  String? notice;
   String? error;
   Future<void> submit() async {
-    setState(() { busy = true; error = null; });
+    if (busy) return;
+    setState(() { busy = true; error = null; notice = null; });
     try {
       if (register) {
-        await db!.auth.signUp(email: email.text.trim(), password: password.text);
+        final response = await db!.auth.signUp(email: email.text.trim(), password: password.text);
+        if (mounted && response.session == null) setState(() {
+          register = false;
+          notice = 'Перевірте електронну пошту та підтвердьте реєстрацію. Потім поверніться сюди й увійдіть.';
+        });
       } else {
         await db!.auth.signInWithPassword(email: email.text.trim(), password: password.text);
       }
-    } on AuthException catch (e) { setState(() => error = e.message); }
-      catch (e) { setState(() => error = 'Не вдалося виконати запит: $e'); }
+    } on AuthException catch (e) { if (mounted) setState(() => error = e.message); }
+      catch (e) { if (mounted) setState(() => error = 'Не вдалося виконати запит: $e'); }
     finally { if (mounted) setState(() => busy = false); }
   }
   @override
@@ -220,6 +161,7 @@ class _AuthScreenState extends State<AuthScreen> {
         TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder())),
         const SizedBox(height: 12),
         TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Пароль (від 8 символів)', border: OutlineInputBorder())),
+        if (notice != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(notice!)),
         if (error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(error!, style: const TextStyle(color: Colors.red))),
         const SizedBox(height: 18),
         FilledButton(onPressed: busy ? null : submit, child: Text(busy ? 'Зачекайте…' : register ? 'Створити обліковий запис дорослого' : 'Увійти')),
@@ -243,13 +185,14 @@ class _HomeShellState extends State<HomeShell> {
   final pages = const [CatalogScreen(), MyShopScreen(), ModerationScreen(), MapScreen(), FamilyScreen(), ChatsScreen(), AgreementsScreen()];
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('ToyTown'), actions: [
+    appBar: AppBar(leading: IconButton(tooltip: 'Заблокувати кабінет', icon: const Icon(Icons.lock_outline),
+      onPressed: GuardianScope.of(context)?.close), title: const Text('ToyTown'), actions: [
       IconButton(tooltip: 'Про ToyTown', onPressed: () => showToyTownVersion(context), icon: const Icon(Icons.info_outline)),
       IconButton(tooltip: 'Вийти', onPressed: () => db!.auth.signOut(), icon: const Icon(Icons.logout))
     ]),
     body: pages[index],
     floatingActionButton: index == 1 ? FloatingActionButton.extended(
-      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddListingScreen())),
+      onPressed: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => const AddListingScreen())),
       icon: const Icon(Icons.add), label: const Text('Додати іграшку')) : null,
     bottomNavigationBar: NavigationBar(selectedIndex: index, onDestinationSelected: (v) => setState(() => index = v), destinations: const [
       NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Каталог'),
@@ -264,22 +207,23 @@ class _HomeShellState extends State<HomeShell> {
 }
 
 
-Future<List<Listing>> fetchListings({bool mine = false}) async {
+Future<List<Listing>> fetchListings(BuildContext context, {bool mine = false}) async {
   final user = db!.auth.currentUser!;
-  var query = db!.from('listings').select();
+  var query = apiFor(context).from('listings').select();
   if (mine) {
-    final memberships = await db!.from('family_members').select('family_id').eq('user_id', user.id);
+    final memberships = await apiFor(context).from('family_members').select('family_id').eq('user_id', user.id);
     if (memberships.isEmpty) return [];
-    query = db!.from('listings').select().inFilter('family_id', memberships.map((row) => row['family_id']).toList()).isFilter('deleted_at', null);
+    query = apiFor(context).from('listings').select().inFilter('family_id', memberships.map((row) => row['family_id']).toList()).isFilter('deleted_at', null);
   } else {
-    query = db!.from('public_listings').select();
+    query = apiFor(context).from('public_listings').select();
   }
   final rows = await query.order('created_at', ascending: false);
   return rows.map<Listing>((e) => Listing.fromMap(e)).toList();
 }
 
 class CatalogScreen extends StatefulWidget {
-  const CatalogScreen({super.key});
+  const CatalogScreen({super.key, this.readOnly = false});
+  final bool readOnly;
   @override
   State<CatalogScreen> createState() => _CatalogScreenState();
 }
@@ -293,10 +237,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
   @override
   void initState() {
     super.initState();
-    future = fetchListings();
+    future = fetchListings(context);
   }
 
-  Future<void> refresh() async => setState(() { future = fetchListings(); });
+  Future<void> refresh() async => setState(() { future = fetchListings(context); });
 
   @override
   void dispose() {
@@ -327,9 +271,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
         Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), child: Column(children: [
           Align(alignment: Alignment.centerRight, child: TextButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FamilyShopsScreen(
-              repository: SupabaseFamilyShopsRepository(db!), listingBuilder: (item) => ListingCard(item: item)))),
+              repository: SupabaseFamilyShopsRepository(db!), listingBuilder: (item) => ListingCard(item: item, readOnly: widget.readOnly)))),
             icon: const Icon(Icons.holiday_village_rounded), label: const Text('Крамнички родин'))),
-          Align(alignment: Alignment.centerRight, child: TextButton.icon(
+          if (!widget.readOnly) Align(alignment: Alignment.centerRight, child: TextButton.icon(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PartnerOffersScreen(client: apiFor(context)))),
+            icon: const Icon(Icons.shopping_bag_outlined), label: const Text('Партнерські магазини'))),
+          if (!widget.readOnly) Align(alignment: Alignment.centerRight, child: TextButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedListingsScreen())),
             icon: const Icon(Icons.bookmark_outline), label: const Text('Збережені оголошення'))),
           TextField(controller: search, onChanged: (_) => setState(() {}),
@@ -339,12 +286,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 icon: const Icon(Icons.clear), onPressed: () { search.clear(); setState(() {}); })),),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: DropdownButtonFormField<String>(value: category,
+            Expanded(child: DropdownButtonFormField<String>(isExpanded: true, value: category,
               decoration: const InputDecoration(labelText: 'Категорія', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
               items: ['Усі категорії','Конструктори','Ляльки','Машинки','Настільні ігри','М’які іграшки','Інше'].map((v) => DropdownMenuItem(value: v, child: Text(v, overflow: TextOverflow.ellipsis))).toList(),
               onChanged: (v) => setState(() => category = v ?? 'Усі категорії'))),
             const SizedBox(width: 8),
-            Expanded(child: DropdownButtonFormField<String>(value: deal,
+            Expanded(child: DropdownButtonFormField<String>(isExpanded: true, value: deal,
               decoration: const InputDecoration(labelText: 'Формат', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
               items: ['Усі формати','Дарування','Обмін','Продаж'].map((v) => DropdownMenuItem(value: v, child: Text(v, overflow: TextOverflow.ellipsis))).toList(),
               onChanged: (v) => setState(() => deal = v ?? 'Усі формати'))),
@@ -354,7 +301,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ? ListView(children: const [SizedBox(height: 70), EmptyState(icon: Icons.search_off, title: 'Нічого не знайдено', subtitle: 'Змініть пошуковий запит або фільтри.')])
           : ListView.separated(padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) => ListingCard(item: items[i])))),
+              itemBuilder: (_, i) => ListingCard(key: ValueKey(items[i].id), item: items[i], readOnly: widget.readOnly, onChanged: refresh)))),
       ]);
     },
   );
@@ -369,7 +316,7 @@ class MyShopScreen extends StatefulWidget {
 }
 class _MyShopScreenState extends State<MyShopScreen> {
   late Future<List<Listing>> future;
-  Future<List<Listing>> load() => widget.loadListings?.call() ?? fetchListings(mine: true);
+  Future<List<Listing>> load() => widget.loadListings?.call() ?? fetchListings(context, mine: true);
   @override
   void initState() { super.initState(); future = load(); }
   Future<void> refresh() async => setState(() { future = load(); });
@@ -377,7 +324,7 @@ class _MyShopScreenState extends State<MyShopScreen> {
     if (widget.deleteListing != null) {
       await widget.deleteListing!(id);
     } else {
-      await db!.rpc('delete_own_listing', params: {'target_listing': id});
+      await apiFor(context).rpc('delete_own_listing', params: {'target_listing': id});
     }
     if (mounted) await refresh();
   }
@@ -404,22 +351,23 @@ class _MyShopScreenState extends State<MyShopScreen> {
 }
 
 class ListingCard extends StatefulWidget {
-  final Listing item; final bool showStatus;
+  final Listing item; final bool showStatus, readOnly;
+  final VoidCallback? onUnsaved;
   final Future<void> Function()? onDelete;
   final Future<void> Function()? onChanged;
-  const ListingCard({super.key, required this.item, this.showStatus = false, this.onDelete, this.onChanged});
+  const ListingCard({super.key, required this.item, this.showStatus = false, this.readOnly = false, this.onUnsaved, this.onDelete, this.onChanged});
   @override
   State<ListingCard> createState() => _ListingCardState();
 }
 class _ListingCardState extends State<ListingCard> {
   bool saved = false, saving = false;
   @override
-  void initState() { super.initState(); if (!widget.showStatus) _loadSaved(); }
+  void initState() { super.initState(); if (!widget.showStatus && !widget.readOnly) _loadSaved(); }
   Future<void> _loadSaved() async {
     try {
-      final member = await db!.from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
+      final member = await apiFor(context).from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
       if (member == null) return;
-      final row = await db!.from('saved_listings').select('listing_id').eq('family_id', member['family_id']).eq('listing_id', widget.item.id).maybeSingle();
+      final row = await apiFor(context).from('saved_listings').select('listing_id').eq('family_id', member['family_id']).eq('listing_id', widget.item.id).maybeSingle();
       if (mounted) setState(() => saved = row != null);
     } catch (_) {}
   }
@@ -427,14 +375,14 @@ class _ListingCardState extends State<ListingCard> {
     if (saving) return;
     setState(() => saving = true);
     try {
-      final member = await db!.from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
+      final member = await apiFor(context).from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
       if (member == null) throw Exception('Спочатку створіть профіль родини у вкладці «Родина».');
       if (saved) {
-        await db!.from('saved_listings').delete().eq('family_id', member['family_id']).eq('listing_id', widget.item.id);
+        await apiFor(context).from('saved_listings').delete().eq('family_id', member['family_id']).eq('listing_id', widget.item.id);
       } else {
-        await db!.from('saved_listings').insert({'family_id': member['family_id'], 'listing_id': widget.item.id});
+        await apiFor(context).from('saved_listings').insert({'family_id': member['family_id'], 'listing_id': widget.item.id});
       }
-      if (mounted) setState(() => saved = !saved);
+      if (mounted) { setState(() => saved = !saved); if (!saved) widget.onUnsaved?.call(); }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не вдалося зберегти: $e')));
     } finally { if (mounted) setState(() => saving = false); }
@@ -443,7 +391,7 @@ class _ListingCardState extends State<ListingCard> {
   Widget build(BuildContext context) {
     final item = widget.item; final showStatus = widget.showStatus;
     return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [const Icon(Icons.toys, color: Color(0xFF6C63D9)), const SizedBox(width: 8), Expanded(child: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17))), if (showStatus) StatusChip(status: item.status), if (!showStatus) IconButton(tooltip: saved ? 'Прибрати зі збереженого' : 'Зберегти', onPressed: saving ? null : _toggleSaved, icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, color: saved ? const Color(0xFF6C63D9) : null))]),
+      Row(children: [const Icon(Icons.toys, color: Color(0xFF6C63D9)), const SizedBox(width: 8), Expanded(child: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17))), if (showStatus) StatusChip(status: item.status), if (!showStatus && !widget.readOnly) IconButton(tooltip: saved ? 'Прибрати зі збереженого' : 'Зберегти', onPressed: saving ? null : _toggleSaved, icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, color: saved ? const Color(0xFF6C63D9) : null))]),
       if (showStatus && widget.onDelete != null) ContentDeleteButton(
         key: ValueKey('delete-listing-${item.id}'), kind: DeletableContent.listing, onDelete: widget.onDelete!),
       const SizedBox(height: 8), Text(item.description),
@@ -452,14 +400,14 @@ class _ListingCardState extends State<ListingCard> {
       TextButton.icon(
         onPressed: () async {
           final deleted = await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(
-            builder: (_) => ListingDetails(item: item, canContact: !showStatus, onDelete: widget.onDelete),
+            builder: (_) => ListingDetails(item: item, canContact: !showStatus && !widget.readOnly, readOnly: widget.readOnly, onDelete: widget.onDelete),
           ));
           if (deleted == true && context.mounted) await widget.onChanged?.call();
         },
         icon: const Icon(Icons.open_in_new),
         label: const Text('Переглянути оголошення'),
       ),
-      if (!showStatus) Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>_startListingChat(context,item),icon:const Icon(Icons.chat_bubble_outline),label:const Text('Написати родині'))),
+      if (!showStatus && !widget.readOnly) Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>_startListingChat(context,item),icon:const Icon(Icons.chat_bubble_outline),label:const Text('Написати родині'))),
     ])));
   }
 }
@@ -474,12 +422,12 @@ class _SavedListingsScreenState extends State<SavedListingsScreen> {
   @override
   void initState() { super.initState(); future = _load(); }
   Future<List<Listing>> _load() async {
-    final member = await db!.from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
+    final member = await apiFor(context).from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
     if (member == null) return [];
-    final rows = await db!.from('saved_listings').select('listing_id').eq('family_id', member['family_id']);
+    final rows = await apiFor(context).from('saved_listings').select('listing_id').eq('family_id', member['family_id']);
     final ids = rows.map((r) => r['listing_id'].toString()).toList();
     if (ids.isEmpty) return [];
-    final listings = await db!.from('public_listings').select().inFilter('id', ids).order('created_at', ascending: false);
+    final listings = await apiFor(context).from('public_listings').select().inFilter('id', ids).order('created_at', ascending: false);
     return listings.map<Listing>((r) => Listing.fromMap(r)).toList();
   }
   Future<void> refresh() async => setState(() { future = _load(); });
@@ -490,15 +438,15 @@ class _SavedListingsScreenState extends State<SavedListingsScreen> {
       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
       return RefreshIndicator(onRefresh: refresh, child: snap.data!.isEmpty
         ? ListView(children: const [SizedBox(height: 90), EmptyState(icon: Icons.bookmark_border, title: 'Поки нічого не збережено', subtitle: 'Натискайте значок закладки в каталозі, щоб повернутися до оголошення пізніше.')])
-        : ListView.separated(padding: const EdgeInsets.all(16), itemCount: snap.data!.length, separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (_, i) => ListingCard(item: snap.data![i])));
+        : ListView.separated(padding: const EdgeInsets.all(16), itemCount: snap.data!.length, separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (_, i) => ListingCard(key: ValueKey(snap.data![i].id), item: snap.data![i], onUnsaved: refresh, onChanged: refresh)));
     }));
 }
 
 class ListingDetails extends StatefulWidget {
-  const ListingDetails({super.key, required this.item, required this.canContact, this.onDelete});
+  const ListingDetails({super.key, required this.item, required this.canContact, this.readOnly = false, this.onDelete});
 
   final Listing item;
-  final bool canContact;
+  final bool canContact, readOnly;
   final Future<void> Function()? onDelete;
 
   @override
@@ -510,26 +458,26 @@ class _ListingDetailsState extends State<ListingDetails> {
   bool ownsListing = false;
 
   @override
-  void initState() { super.initState(); ownsListing = widget.onDelete != null; if (!ownsListing) checkOwner(); }
+  void initState() { super.initState(); ownsListing = widget.onDelete != null; if (!ownsListing && !widget.readOnly) checkOwner(); }
   Future<void> checkOwner() async {
     if (db?.auth.currentUser == null) return;
     try {
-      final members = await db!.from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id);
+      final members = await apiFor(context).from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id);
       if (members.isEmpty) return;
-      final row = await db!.from('listings').select('id').eq('id', widget.item.id).inFilter('family_id', members.map((member) => member['family_id']).toList()).isFilter('deleted_at', null).maybeSingle();
+      final row = await apiFor(context).from('listings').select('id').eq('id', widget.item.id).inFilter('family_id', members.map((member) => member['family_id']).toList()).isFilter('deleted_at', null).maybeSingle();
       if (mounted) setState(() => ownsListing = row != null);
     } catch (_) { /* Ownership is never inferred after a failed request. */ }
   }
   Future<void> removeListing() async {
     if (widget.onDelete != null) { await widget.onDelete!(); }
-    else { await db!.rpc('delete_own_listing', params: {'target_listing': widget.item.id}); }
+    else { await apiFor(context).rpc('delete_own_listing', params: {'target_listing': widget.item.id}); }
     if (mounted) Navigator.of(context).pop(true);
   }
 
   Future<String>? loadPhoto() {
     final path = widget.item.photoPath;
     if (path == null || path.isEmpty) return null;
-    return db!.storage.from('listing-images').createSignedUrl(path, 60);
+    return apiFor(context).storage.from('listing-images').createSignedUrl(path, 60);
   }
 
   @override
@@ -581,6 +529,8 @@ class _ListingDetailsState extends State<ListingDetails> {
               Text('${item.price} грн'),
             const SizedBox(height: 12),
             Text(item.description),
+            if (!widget.readOnly && GuardianScope.of(context) != null)
+              ListingPartnerOffers(client: apiFor(context), listingId: item.id),
             if (widget.canContact && !ownsListing)
               FilledButton.icon(
                 onPressed: () => _startListingChat(context, item),
@@ -597,7 +547,7 @@ class _ListingDetailsState extends State<ListingDetails> {
 }
 
 Future<void> _startListingChat(BuildContext context, Listing item) async {
-  try { final id=await db!.rpc('start_listing_conversation',params:{'target_listing':item.id});
+  try { final id=await apiFor(context).rpc('start_listing_conversation',params:{'target_listing':item.id});
     if(context.mounted) await Navigator.push(context,MaterialPageRoute(builder:(_)=>ConversationScreen(conversationId:id.toString(),title:item.title)));
   } catch(e) { if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Не вдалося відкрити чат: $e'))); }
 }
@@ -618,6 +568,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final title = TextEditingController(), description = TextEditingController(), city = TextEditingController();
   String category = 'Конструктори', condition = 'used', deal = 'gift';
   bool busy = false; XFile? photo;
+  final price = TextEditingController(), brand = TextEditingController(), model = TextEditingController();
   final speech = stt.SpeechToText();
   bool loadingCity = true;
   @override
@@ -630,11 +581,8 @@ class _AddListingScreenState extends State<AddListingScreen> {
       final client = db;
       final user = client?.auth.currentUser;
       if (client == null || user == null) return;
-      final row = await client.from('family_members').select('families(city)').eq('user_id', user.id).maybeSingle();
-      final family = row?['families'];
-      if (mounted && family is Map && city.text.isEmpty) {
-        city.text = (family['city'] ?? '').toString();
-      }
+      final settlement = await client.rpc('my_family_city');
+      if (mounted && settlement is String && city.text.isEmpty) city.text = settlement;
     } catch (_) {
       // Manual city entry remains available.
     } finally {
@@ -696,42 +644,57 @@ class _AddListingScreenState extends State<AddListingScreen> {
     }
   }
   Future<void> save() async {
-    if (title.text.trim().isEmpty || city.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вкажіть назву і місто.'))); return; }
+    if (busy) return;
+    if (title.text.trim().length < 2 || city.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вкажіть назву і місто.'))); return; }
+    final amount = int.tryParse(price.text.trim());
+    if (deal == 'sale' && (amount == null || amount < 1 || amount > 2147483647)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Укажіть ціну в цілих гривнях.')));
+      return;
+    }
     setState(() => busy = true);
     try {
-      final member = await db!.from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
+      if (!(await SettlementIndex.shared).containsCity(city.text)) throw const FormatException('Укажіть лише назву населеного пункту України.');
+      if (!mounted) return;
+      final member = await apiFor(context).from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
       if (member == null) throw Exception('Спочатку створіть профіль родини у вкладці «Родина».');
       String? photoUrl;
       if (photo != null) {
         final bytes = await photo!.readAsBytes();
         final path = '${member['family_id']}/${DateTime.now().millisecondsSinceEpoch}_${photo!.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}';
-        await db!.storage.from('listing-images').uploadBinary(path, bytes);
+        await apiFor(context).storage.from('listing-images').uploadBinary(path, bytes);
         photoUrl = path;
       }
-      await db!.from('listings').insert({
+      await apiFor(context).from('listings').insert({
         'family_id': member['family_id'], 'title': title.text.trim(),
         'description': description.text.trim(), 'category': category,
         'condition': condition, 'deal_type': deal, 'city': city.text.trim(),
-        'photo_path': photoUrl, 'status': 'pending'
+        'photo_path': photoUrl, 'status': 'pending', 'preferred_shelf': widget.shelf,
+        'price': deal == 'sale' ? amount : null, 'brand': brand.text.trim(), 'model_code': model.text.trim()
       });
       if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Оголошення надіслано батькам на підтвердження.'))); Navigator.pop(context); }
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
     finally { if (mounted) setState(() => busy = false); }
   }
   @override
-  void dispose() { speech.cancel(); title.dispose(); description.dispose(); city.dispose(); super.dispose(); }
+  void dispose() { speech.cancel(); price.dispose(); brand.dispose(); model.dispose(); title.dispose(); description.dispose(); city.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: Text(widget.shelf == null ? 'Нова іграшка' : 'Нова іграшка · полиця ${widget.shelf! + 1}')), body: ListView(padding: const EdgeInsets.all(16), children: [
     const Text('Сфотографуй тільки іграшку, без облич, адрес чи особистих речей.'),
     const SizedBox(height: 8),
     FilledButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.camera), icon: const Icon(Icons.camera_alt_outlined), label: const Text('Сфотографувати іграшку')),
     if (photo != null) FutureBuilder(future: photo!.readAsBytes(), builder: (context, snap) => snap.hasData ? Image.memory(snap.data!, height: 160, fit: BoxFit.contain) : const SizedBox.shrink()),
-    TextField(controller: title, decoration: InputDecoration(labelText: 'Назва іграшки', border: const OutlineInputBorder(), suffixIcon: mic(title))),
+    TextField(controller: title, maxLength: 80, decoration: InputDecoration(labelText: 'Назва іграшки', border: const OutlineInputBorder(), suffixIcon: mic(title))),
     const SizedBox(height: 12), TextField(controller: description, maxLines: 3, decoration: InputDecoration(labelText: 'Опис', border: const OutlineInputBorder(), suffixIcon: mic(description))),
     const SizedBox(height: 12), TextField(controller: city, enabled: !loadingCity && !busy, decoration: InputDecoration(labelText: 'Місто (без адреси)', border: const OutlineInputBorder(), helperText: loadingCity ? 'Завантажуємо місто родини…' : 'Місто з профілю родини')),
     const SizedBox(height: 12), DropdownButtonFormField(value: category, decoration: const InputDecoration(labelText: 'Категорія'), items: ['Конструктори','Ляльки','Машинки','Настільні ігри','М’які іграшки','Інше'].map((v)=>DropdownMenuItem(value:v, child:Text(v))).toList(), onChanged:(v)=>setState(()=>category=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: condition, decoration: const InputDecoration(labelText: 'Стан'), items: const [DropdownMenuItem(value:'new', child:Text('Нова')), DropdownMenuItem(value:'used', child:Text('Вживана'))], onChanged:(v)=>setState(()=>condition=v!)),
     const SizedBox(height: 12), DropdownButtonFormField(value: deal, decoration: const InputDecoration(labelText: 'Формат'), items: const [DropdownMenuItem(value:'gift', child:Text('Дарування')), DropdownMenuItem(value:'exchange', child:Text('Обмін')), DropdownMenuItem(value:'sale', child:Text('Продаж'))], onChanged:(v)=>setState(()=>deal=v!)),
+    if (deal == 'sale') TextField(controller: price, keyboardType: TextInputType.number, maxLength: 10,
+      decoration: const InputDecoration(labelText: 'Ціна, грн')),
+    ExpansionTile(title: const Text('Марка та модель (за бажанням)'), children: [
+      TextField(controller: brand, maxLength: 80, decoration: const InputDecoration(labelText: 'Марка')),
+      TextField(controller: model, maxLength: 80, decoration: const InputDecoration(labelText: 'Модель або артикул')),
+    ]),
     const SizedBox(height: 12), OutlinedButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.gallery), icon: const Icon(Icons.photo), label: Text(photo == null ? 'Додати фото' : 'Фото вибрано')),
     const SizedBox(height: 8), FilledButton(onPressed: busy || loadingCity || dictating != null ? null : save, child: Text(busy ? 'Збереження…' : 'Показати батькам')),
     const SizedBox(height: 12), const Text('Оголошення не публікується автоматично. Воно очікує перевірки дорослим.', style: TextStyle(color: Colors.black54)),
@@ -753,9 +716,9 @@ class _ModerationScreenState extends State<ModerationScreen> {
 
   Future<List<Map<String, dynamic>>> loadPending() async {
     final userId = db!.auth.currentUser!.id;
-    final member = await db!.from('family_members').select('family_id').eq('user_id', userId).maybeSingle();
+    final member = await apiFor(context).from('family_members').select('family_id').eq('user_id', userId).maybeSingle();
     if (member == null) return [];
-    final rows = await db!.from('listings').select('id,title,description,city,category,deal_type,photo_path,created_at')
+    final rows = await apiFor(context).from('listings').select('id,title,description,city,category,deal_type,photo_path,created_at')
       .eq('family_id', member['family_id']).eq('status', 'pending').order('created_at');
     return List<Map<String, dynamic>>.from(rows);
   }
@@ -763,7 +726,7 @@ class _ModerationScreenState extends State<ModerationScreen> {
   Future<void> decide(Map<String, dynamic> item, bool approve) async {
     setState(() => busy = true);
     try {
-      await db!.rpc('approve_listing', params: {
+      await apiFor(context).rpc('approve_listing', params: {
         'target_listing': item['id'], 'approve': approve,
         'note': approve ? 'Підтверджено дорослим у застосунку' : 'Відхилено дорослим у застосунку',
       });
@@ -791,7 +754,7 @@ class _ModerationScreenState extends State<ModerationScreen> {
             Text(item['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             if (item['photo_path'] is String && (item['photo_path'] as String).isNotEmpty)
               FutureBuilder<String>(
-                future: db!.storage.from('listing-images').createSignedUrl(item['photo_path'] as String, 60),
+                future: apiFor(context).storage.from('listing-images').createSignedUrl(item['photo_path'] as String, 60),
                 builder: (context, photo) => photo.hasData
                   ? Image.network(photo.data!, height: 180, fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Text('Фото не завантажилося.'))
@@ -823,13 +786,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
   @override
   void initState() { super.initState(); load(); }
   Future<void> load() async {
-    try { final id = db!.auth.currentUser!.id; final row = await db!.from('family_members').select('family_id, families(name, city, guardian_name)').eq('user_id', id).maybeSingle();
+    try { final id = db!.auth.currentUser!.id; final row = await apiFor(context).from('family_members').select('family_id, families(name, city, guardian_name)').eq('user_id', id).maybeSingle();
       if (row != null) {
         profile = row; final f = row['families'];
         familyName.text = f['name'] ?? ''; city.text = f['city'] ?? ''; guardianName.text = f['guardian_name'] ?? '';
-        final childRows = await db!.from('child_profiles').select('id,nickname,age_band,created_at').eq('family_id', row['family_id']).order('created_at');
+        final childRows = await apiFor(context).from('child_profiles').select('id,nickname,age_band,created_at').eq('family_id', row['family_id']).order('created_at');
         children = List<Map<String,dynamic>>.from(childRows);
-        final noticeRows = await db!.from('family_notifications').select('id,title,body,kind,is_read,created_at').eq('family_id', row['family_id']).order('created_at', ascending: false).limit(30);
+        final noticeRows = await apiFor(context).from('family_notifications').select('id,title,body,kind,is_read,created_at').eq('family_id', row['family_id']).order('created_at', ascending: false).limit(30);
         notifications = List<Map<String,dynamic>>.from(noticeRows);
       }
       if (mounted) setState(() {});
@@ -839,13 +802,11 @@ class _FamilyScreenState extends State<FamilyScreen> {
     if (familyName.text.trim().isEmpty || guardianName.text.trim().isEmpty || city.text.trim().isEmpty) return;
     setState(()=>busy=true);
     try {
-      final user = db!.auth.currentUser!;
-      if (profile == null) {
-        final f = await db!.from('families').insert({'name':familyName.text.trim(),'guardian_name':guardianName.text.trim(),'city':city.text.trim(),'created_by':user.id}).select('id').single();
-        await db!.from('family_members').insert({'family_id':f['id'],'user_id':user.id,'role':'guardian'});
-      } else {
-        await db!.from('families').update({'name':familyName.text.trim(),'guardian_name':guardianName.text.trim(),'city':city.text.trim()}).eq('id',profile!['family_id']);
-      }
+      if (!(await SettlementIndex.shared).containsCity(city.text)) throw const FormatException('Укажіть лише назву населеного пункту України.');
+      if (!mounted) return;
+      await apiFor(context).rpc('save_family_profile', params: {
+        'family_name': familyName.text.trim(), 'adult_name': guardianName.text.trim(), 'settlement': city.text.trim(),
+      });
       await load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Профіль родини збережено.')));
     } catch(e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$e'))); }
@@ -856,18 +817,18 @@ class _FamilyScreenState extends State<FamilyScreen> {
     if (familyId == null || childNickname.text.trim().isEmpty) return;
     setState(() => childBusy = true);
     try {
-      await db!.from('child_profiles').insert({'family_id': familyId, 'nickname': childNickname.text.trim(), 'age_band': childAgeBand});
+      await apiFor(context).from('child_profiles').insert({'family_id': familyId, 'nickname': childNickname.text.trim(), 'age_band': childAgeBand});
       childNickname.clear(); await load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Дитячий профіль додано.')));
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не вдалося додати профіль: $e'))); }
     finally { if (mounted) setState(() => childBusy = false); }
   }
   Future<void> markNotificationRead(String id) async {
-    try { await db!.from('family_notifications').update({'is_read': true}).eq('id', id); await load(); }
+    try { await apiFor(context).from('family_notifications').update({'is_read': true}).eq('id', id); await load(); }
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не вдалося оновити сповіщення: $e'))); }
   }
   Future<void> deleteChild(String id) async {
-    try { await db!.from('child_profiles').delete().eq('id', id); await load(); }
+    try { await apiFor(context).from('child_profiles').delete().eq('id', id); await load(); }
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не вдалося видалити профіль: $e'))); }
   }
   @override
@@ -916,20 +877,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
         if (mounted) setState(() => chats = rows);
         return;
       }
-      final rows = await db!.from('family_conversations').select('id,listing_id,created_at,updated_at,family_a,family_b,listing:listings(title)').order('updated_at', ascending:false);
-      final states = await db!.from('conversation_user_state').select('conversation_id,hidden').eq('user_id', db!.auth.currentUser!.id);
+      final rows = await apiFor(context).from('family_conversations').select('id,listing_id,created_at,updated_at,family_a,family_b,listing:listings(title)').order('updated_at', ascending:false);
+      final states = await apiFor(context).from('conversation_user_state').select('conversation_id,hidden').eq('user_id', db!.auth.currentUser!.id);
       final hidden = {for (final row in states) if (row['hidden'] == true) row['conversation_id']};
       if (mounted) setState(() => chats = List<Map<String,dynamic>>.from(rows).where((row) => !hidden.contains(row['id'])).toList());
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Не вдалося завантажити чати: $e'))); }
   }
   Future<void> clearConversation(String id) async {
     if (widget.clearConversation != null) { await widget.clearConversation!(id); }
-    else { await db!.rpc('clear_own_conversation', params: {'target_conversation': id}); }
+    else { await apiFor(context).rpc('clear_own_conversation', params: {'target_conversation': id}); }
     if (mounted) await load();
   }
   Future<void> startChat() async {
     final listing = TextEditingController();
-    final id = await showDialog<String>(context:context,builder:(context)=>AlertDialog(
+    final id = await showDialog<String>(useRootNavigator: false, context:context,builder:(context)=>AlertDialog(
       title:const Text('Почати розмову'),
       content:TextField(controller:listing,decoration:const InputDecoration(labelText:'ID оголошення',hintText:'Вставте ID оголошення')),
       actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Скасувати')),FilledButton(onPressed:()=>Navigator.pop(context,listing.text.trim()),child:const Text('Продовжити'))],
@@ -938,7 +899,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     if (id == null || id.isEmpty) return;
     setState(()=>busy=true);
     try {
-      final result = await db!.rpc('start_listing_conversation',params:{'target_listing':id});
+      final result = await apiFor(context).rpc('start_listing_conversation',params:{'target_listing':id});
       await load();
       if (!mounted) return;
       final conversationId = result.toString();
@@ -979,7 +940,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   void initState(){super.initState();load();}
   Future<void> load() async {
     try { final rows=widget.messageLoader != null ? await widget.messageLoader!()
-      : await db!.from('family_messages').select('id,sender_user_id,body,created_at').eq('conversation_id',widget.conversationId).order('created_at');
+      : await apiFor(context).from('family_messages').select('id,sender_user_id,body,created_at').eq('conversation_id',widget.conversationId).order('created_at');
       if(mounted)setState(()=>messages=List<Map<String,dynamic>>.from(rows)
         .where((message) => !deletedMessageIds.contains(message['id'].toString())).toList());
     } catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Помилка завантаження: $e')));}
@@ -987,14 +948,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
   Future<void> createAgreement() async {
     final note = TextEditingController(text: 'Домовленість щодо іграшки з цієї розмови. Передачу узгоджують дорослі у громадському місці.');
-    final accepted = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+    final accepted = await showDialog<bool>(useRootNavigator: false, context: context, builder: (ctx) => AlertDialog(
       title: const Text('Нова домовленість'),
       content: TextField(controller: note, maxLines: 3, maxLength: 500, decoration: const InputDecoration(labelText: 'Умови домовленості')),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Скасувати')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Надіслати пропозицію'))],
     ));
     if (accepted != true) { note.dispose(); return; }
     try {
-      await db!.rpc('create_exchange_agreement', params: {'target_conversation': widget.conversationId, 'agreement_note': note.text.trim()});
+      await apiFor(context).rpc('create_exchange_agreement', params: {'target_conversation': widget.conversationId, 'agreement_note': note.text.trim()});
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Пропозицію домовленості створено. Відкрийте вкладку «Угоди».')));
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не вдалося створити домовленість: $e'))); }
     finally { note.dispose(); }
@@ -1003,7 +964,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> send() async {
     final body=composer.text.trim(); if(body.isEmpty||sending)return;
     setState(()=>sending=true);
-    try { await db!.from('family_messages').insert({'conversation_id':widget.conversationId,'sender_user_id':db!.auth.currentUser!.id,'body':body}); composer.clear(); await load(); }
+    try { await apiFor(context).from('family_messages').insert({'conversation_id':widget.conversationId,'sender_user_id':db!.auth.currentUser!.id,'body':body}); composer.clear(); await load(); }
     catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Не вдалося надіслати: $e')));}
     finally{if(mounted)setState(()=>sending=false);}
   }
@@ -1011,7 +972,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (widget.removeMessage != null) {
       await widget.removeMessage!(id);
     } else {
-      await db!.rpc('delete_own_message', params: {'target_message': id});
+      await apiFor(context).rpc('delete_own_message', params: {'target_message': id});
     }
     if (mounted) setState(() {
       deletedMessageIds.add(id);
@@ -1020,7 +981,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
   Future<void> clearChat() async {
     if (widget.clearChat != null) { await widget.clearChat!(); }
-    else { await db!.rpc('clear_own_conversation', params: {'target_conversation': widget.conversationId}); }
+    else { await apiFor(context).rpc('clear_own_conversation', params: {'target_conversation': widget.conversationId}); }
     if (mounted) Navigator.of(context).pop();
   }
   @override
@@ -1052,15 +1013,15 @@ class _AgreementsScreenState extends State<AgreementsScreen> {
   @override
   void initState() { super.initState(); future = loadAgreements(); }
   Future<List<Map<String,dynamic>>> loadAgreements() async {
-    final rows = await db!.from('exchange_agreements').select('id,conversation_id,listing_id,proposer_family,receiver_family,created_by,status,note,proposer_confirmed_at,receiver_confirmed_at,created_at').order('created_at', ascending:false);
-    final hidden = await db!.rpc('my_hidden_exchange_agreements');
+    final rows = await apiFor(context).from('exchange_agreements').select('id,conversation_id,listing_id,proposer_family,receiver_family,created_by,status,note,proposer_confirmed_at,receiver_confirmed_at,created_at').order('created_at', ascending:false);
+    final hidden = await apiFor(context).rpc('my_hidden_exchange_agreements');
     final hiddenIds = (hidden as List).map((row) => row['agreement_id'].toString()).toSet();
     return List<Map<String,dynamic>>.from(rows)
         .where((row) => !hiddenIds.contains(row['id'].toString())).toList();
   }
   Future<void> refresh() async => setState(() { future = loadAgreements(); });
   Future<void> hideAgreement(String id) async {
-    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+    final confirmed = await showDialog<bool>(useRootNavigator: false, context: context, builder: (ctx) => AlertDialog(
       title: const Text('Прибрати угоду зі списку?'),
       content: const Text('Угода зникне лише з вашого списку. В іншої родини вона залишиться. Дані про передачу не видаляються.'),
       actions: [
@@ -1070,7 +1031,7 @@ class _AgreementsScreenState extends State<AgreementsScreen> {
     ));
     if (confirmed != true) return;
     try {
-      await db!.rpc('hide_own_exchange_agreement', params: {'target_agreement': id});
+      await apiFor(context).rpc('hide_own_exchange_agreement', params: {'target_agreement': id});
       await refresh();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -1078,9 +1039,9 @@ class _AgreementsScreenState extends State<AgreementsScreen> {
     }
   }
   Future<void> act(String id, String rpc) async {
-    final confirmed = await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:Text(rpc=='cancel_exchange_agreement'?'Скасувати домовленість?':rpc=='confirm_exchange_handover'?'Іграшку передано?':'Підтвердити дію?'),content:Text(rpc=='confirm_exchange_handover'?'Підтверджуйте лише фактичну передачу. Після підтвердження обома родинами оголошення зникне з каталогу.':'Зміна стане видимою іншій родині.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Назад')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Підтвердити'))]));
+    final confirmed = await showDialog<bool>(useRootNavigator: false, context:context,builder:(ctx)=>AlertDialog(title:Text(rpc=='cancel_exchange_agreement'?'Скасувати домовленість?':rpc=='confirm_exchange_handover'?'Іграшку передано?':'Підтвердити дію?'),content:Text(rpc=='confirm_exchange_handover'?'Підтверджуйте лише фактичну передачу. Після підтвердження обома родинами оголошення зникне з каталогу.':'Зміна стане видимою іншій родині.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Назад')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Підтвердити'))]));
     if(confirmed!=true)return;
-    try { await db!.rpc(rpc, params: {'target_agreement': id}); await refresh(); }
+    try { await apiFor(context).rpc(rpc, params: {'target_agreement': id}); await refresh(); }
     catch(e) { if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Дію не виконано: $e'))); }
   }
   String statusLabel(String s) => switch(s) {'proposed'=>'Очікує відповіді','accepted'=>'Погоджено','completed'=>'Передачу підтверджено обома','rejected'=>'Відхилено','cancelled'=>'Скасовано',_=>s};

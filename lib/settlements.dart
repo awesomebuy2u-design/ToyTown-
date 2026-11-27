@@ -30,6 +30,9 @@ class SettlementIndex {
 
   final _names = <String, Map<int, Settlement>>{};
 
+  static final Future<SettlementIndex> shared = load();
+  bool containsCity(String city) => _names.containsKey(normalizeSettlement(city));
+
   static Future<SettlementIndex> load() async => SettlementIndex.fromRows(
       jsonDecode(await rootBundle.loadString('assets/places/ukraine.json')) as List);
 

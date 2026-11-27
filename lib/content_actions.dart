@@ -38,7 +38,7 @@ class _ContentDeleteButtonState extends State<ContentDeleteButton> {
     if (busy) return;
     setState(() => busy = true);
     try {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showDialog<bool>(useRootNavigator: false,
           context: context,
           builder: (ctx) => AlertDialog(
                 title: Text('$label?'),

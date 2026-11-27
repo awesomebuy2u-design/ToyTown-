@@ -1,0 +1,20 @@
+name: Refresh registered partner catalogs
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: read
+jobs:
+  refresh:
+    if: vars.TOYTOWN_PARTNER_SYNC == 'enabled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh YML catalogs
+        env:
+          SUPABASE_URL: https://nmiafhzpzhowzfgdtotb.supabase.co
+          TOYTOWN_PARTNER_FEEDS: ${{ secrets.TOYTOWN_PARTNER_FEEDS }}
+          TOYTOWN_PARTNER_IMPORT_KEY: ${{ secrets.TOYTOWN_PARTNER_IMPORT_KEY }}
+        run: python3 tools/sync_partner_feed.py
