@@ -32,12 +32,15 @@ class _GuardianSetupState extends State<GuardianSetup> {
   );
   bool busy = false;
   String? challenge, message;
+  bool emailVerified = false;
   String get email => widget.account.auth.currentUser?.email ?? '';
 
   Future<void> sendCode() async {
     if (busy) return;
     setState(() {
       busy = true;
+      emailVerified = false;
+      proof.clear();
       message = null;
     });
     try {
@@ -64,7 +67,7 @@ class _GuardianSetupState extends State<GuardianSetup> {
     if (busy) return;
     if (!RegExp(r'^[0-9]{6}$').hasMatch(pin.text) ||
         pin.text != repeat.text ||
-        proof.text.isEmpty) {
+        (!emailVerified && proof.text.trim().isEmpty)) {
       setState(
         () => message =
             'Уведіть підтвердження доступу та двічі той самий шестизначний PIN.',
@@ -78,37 +81,23 @@ class _GuardianSetupState extends State<GuardianSetup> {
     try {
       if (widget.recovery) {
         if (challenge == null) throw const FormatException();
-        final value = proof.text.trim();
-        if (RegExp(r'^[0-9]{6,10}$').hasMatch(value)) {
-          await temporary.auth.verifyOTP(
-            type: OtpType.email,
-            email: email,
-            token: value,
-          );
-        } else {
-          final link = Uri.tryParse(value);
-          final token = link?.queryParameters['token'] ??
-              link?.queryParameters['token_hash'];
-          if (link == null ||
-              link.scheme != 'https' ||
-              link.host != Uri.parse(widget.url).host ||
-              link.path != '/auth/v1/verify' ||
-              token == null ||
-              token.isEmpty) throw const FormatException();
-          await temporary.auth.verifyOTP(
-            type: OtpType.magiclink,
-            tokenHash: token,
-          );
+        if (!emailVerified) {
+          await verifyEmail();
+          if (!mounted) return;
+          verifyAccount();
+          setState(() => emailVerified = true);
+          proof.clear();
         }
       } else {
         challenge = await widget.account.rpc('begin_guardian_setup') as String;
+        if (!mounted) return;
         await temporary.auth.signInWithPassword(
           email: email,
           password: proof.text,
         );
       }
-      if (temporary.auth.currentUser?.id != widget.account.auth.currentUser?.id)
-        throw const FormatException();
+      if (!mounted) return;
+      verifyAccount();
       await temporary.rpc(
         'finish_guardian_setup',
         params: {'challenge': challenge, 'new_pin': pin.text},
@@ -117,13 +106,52 @@ class _GuardianSetupState extends State<GuardianSetup> {
     } catch (_) {
       if (mounted)
         setState(
-          () => message = widget.recovery
-              ? 'Не вдалося підтвердити код або посилання. За потреби замовте новий лист.'
-              : 'Не вдалося створити PIN. Перевірте пароль від акаунта й повторіть.',
+          () => message = emailVerified
+              ? 'Не вдалося зберегти PIN. Повторіть спробу. Якщо минуло понад 10 хвилин, замовте новий лист.'
+              : widget.recovery
+                  ? 'Не вдалося підтвердити код або посилання. За потреби замовте новий лист.'
+                  : 'Не вдалося створити PIN. Перевірте пароль від акаунта й повторіть.',
         );
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  void verifyAccount() {
+    final authenticated = temporary.auth.currentUser?.id;
+    if (authenticated == null ||
+        authenticated != widget.account.auth.currentUser?.id) {
+      throw const FormatException();
+    }
+  }
+
+  Future<void> verifyEmail() async {
+    final submitted = proof.text.trim();
+    if (RegExp(r'^[0-9]{6,10}$').hasMatch(submitted)) {
+      await temporary.auth.verifyOTP(
+        type: OtpType.email,
+        email: email,
+        token: submitted,
+      );
+      return;
+    }
+    final link = Uri.tryParse(submitted);
+    final host = Uri.parse(widget.url);
+    final token =
+        link?.queryParameters['token_hash'] ?? link?.queryParameters['token'];
+    final type = link?.queryParameters['type'];
+    if (link == null ||
+        link.scheme != 'https' ||
+        link.host != host.host ||
+        link.port != host.port ||
+        link.userInfo.isNotEmpty ||
+        link.path != '/auth/v1/verify' ||
+        (type != null && type != 'magiclink' && type != 'email') ||
+        token == null ||
+        token.isEmpty) {
+      throw const FormatException();
+    }
+    await temporary.auth.verifyOTP(type: OtpType.email, tokenHash: token);
   }
 
   Future<void> clearTemporary(SupabaseClient client) async {
@@ -165,18 +193,21 @@ class _GuardianSetupState extends State<GuardianSetup> {
                   challenge == null ? 'Надіслати лист' : 'Надіслати ще раз',
                 ),
               ),
-            TextField(
-              controller: proof,
-              enabled: !busy,
-              obscureText: true,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: widget.recovery
-                    ? 'Код або посилання з листа'
-                    : 'Пароль акаунта',
+            if (emailVerified)
+              const Text('Пошту підтверджено.')
+            else
+              TextField(
+                controller: proof,
+                enabled: !busy,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: widget.recovery
+                      ? 'Код або посилання з листа'
+                      : 'Пароль акаунта',
+                ),
               ),
-            ),
             for (final field in [pin, repeat])
               TextField(
                 controller: field,

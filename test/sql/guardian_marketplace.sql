@@ -4,7 +4,8 @@ do $$
 declare
   u uuid; v uuid; f uuid; g uuid; sid uuid:=gen_random_uuid(); proof uuid:=gen_random_uuid();
   other uuid:=gen_random_uuid(); token text; challenge text; item uuid; b uuid; convo uuid:=gen_random_uuid();
-  a uuid; claims jsonb; store_id uuid; too_old timestamptz; result integer;
+  a uuid; claims jsonb; store_id uuid; result integer;
+  recovery_proof uuid:=gen_random_uuid(); recovery_claims jsonb;
 begin
   if current_setting('toytown.isolated_test_database',true) is distinct from 'on' then raise exception 'Isolated fixture required'; end if;
   select user_id,family_id into u,f from public.family_members order by family_id limit 1;
@@ -88,9 +89,35 @@ begin
   perform set_config('request.headers',jsonb_build_object('x-toytown-guardian',token)::text,true);
   perform public.lock_guardian();
   if private.guardian_valid() then raise exception 'Explicit lock failed'; end if;
+  token := public.unlock_guardian('555111')->>'token';
+  perform set_config('request.headers',jsonb_build_object('x-toytown-guardian',token)::text,true);
+  challenge := public.begin_guardian_setup();
+  execute 'reset role';
+  insert into auth.sessions(id,user_id) values(recovery_proof,u);
+  recovery_claims := jsonb_build_object('session_id', recovery_proof, 'amr', jsonb_build_array(
+    jsonb_build_object('method','otp','timestamp',floor(extract(epoch from clock_timestamp())))));
+  perform set_config('request.jwt.claims',replace(recovery_claims::text,'"otp"','"password"'),true);
+  execute 'set local role authenticated';
+  begin
+    perform public.finish_guardian_setup(challenge,'444222');
+    raise exception 'A password could replace an existing PIN';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',recovery_claims::text,true);
+  perform public.finish_guardian_setup(challenge,'444222');
+  begin
+    perform public.finish_guardian_setup(challenge,'123456');
+    raise exception 'An already used email challenge accepted';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',claims::text,true);
+  if private.guardian_valid() then raise exception 'Recovery retained an elevated session'; end if;
+  if public.unlock_guardian('555111') is not null or public.unlock_guardian('444222') is null then
+    raise exception 'Recovery did not replace the PIN';
+  end if;
   execute 'reset role';
   update public.listings set status='approved' where id=b;
   if (select placements->>b::text from public.family_shop_layouts where family_id=f) is distinct from '2' then raise exception 'Approval lost requested shelf'; end if;
 end $$;
-select 'PASS: two-family guardian enrollment, PIN attempts, scoped access, idle lock, child drafts, shelves, bookmarks, hidden agreements and partner offers' as result;
+select 'PASS: two-family guardian enrollment and recovery, PIN attempts, scoped access, idle lock, child drafts, shelves, bookmarks, hidden agreements and partner offers' as result;
 rollback;
