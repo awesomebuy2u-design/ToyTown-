@@ -15,7 +15,11 @@
 
 ### Підключення партнерських каталогів
 
-Зареєструйте активний магазин у `partner_stores` і вкажіть домен відстежуваних HTTPS-посилань в `offer_host`. У GitHub Actions встановіть змінну `TOYTOWN_PARTNER_SYNC` в `enabled`. Секрет `TOYTOWN_PARTNER_FEEDS` приймає JSON-масив об’єктів із полями `store_id` і `url`. В `TOYTOWN_PARTNER_IMPORT_KEY` встановіть серверний ключ Supabase. Імпорт очікує повний YML-каталог із цінами в гривнях, часом формування, наявністю і погодженими реферальними посиланнями. Перевірте перший імпорт ручним запуском «Refresh registered partner catalogs».
+Перший кандидат — [«Будинок іграшок» в Admitad](https://www.admitad.com/ua/store/offers/budinok-igrashok-ua/). Додайте ToyTown як рекламний майданчик і підтвердьте, що офер приймає трафік із застосунку. Після схвалення сформуйте [повний XML/YML-експорт для України в гривнях](https://admitad.useresponse.com/knowledge-base/article/product-feed-what-it-is-and-how-to-export-it-for-your-website_4) без фільтра за датою зміни й без обмеження товарами зі знижкою. Використовуйте реферальні URL із погодженого фіда. Для «Антошки» доступ до фіда й умови можна уточнити через [відділ e-commerce](https://antoshka.ua/uk/partnership).
+
+Перевірте зразок локально командою `python3 tools/sync_partner_feed.py --check-file catalog.xml`. Для автоматичної перевірки додайте секрет GitHub `TOYTOWN_PARTNER_FEEDS` із JSON-масивом об’єктів із полями `store_id`, `url` та опційним `offer_host`. У ручному запуску «Refresh registered partner catalogs» лишіть увімкненою опцію перевірки без запису. Імпортер очікує повний UTF-8 YML-каталог із часом формування та ознакою наявності.
+
+Для активації зареєструйте активний магазин у `partner_stores` та вкажіть погоджений домен реферальних адрес у `offer_host`. Додайте серверний ключ Supabase до секрету `TOYTOWN_PARTNER_IMPORT_KEY`, увімкніть змінну `TOYTOWN_PARTNER_SYNC` зі значенням `enabled` і запустіть імпорт. Пропозиції без підтвердженої наявності або з фіда старшого за 24 години не показуються.
 
 ## Нове у 1.0.15
 

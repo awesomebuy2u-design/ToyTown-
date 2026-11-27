@@ -1,18 +1,29 @@
 name: Refresh registered partner catalogs
 on:
   workflow_dispatch:
+    inputs:
+      validate_only:
+        description: Validate supplier feeds without saving any offers
+        type: boolean
+        default: true
   schedule:
     - cron: '17 */6 * * *'
 permissions:
   contents: read
 jobs:
   refresh:
-    if: vars.TOYTOWN_PARTNER_SYNC == 'enabled'
+    if: (github.event_name == 'workflow_dispatch' && inputs.validate_only) || vars.TOYTOWN_PARTNER_SYNC == 'enabled'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Validate YML catalogs
+        if: github.event_name == 'workflow_dispatch' && inputs.validate_only
+        env:
+          TOYTOWN_PARTNER_FEEDS: ${{ secrets.TOYTOWN_PARTNER_FEEDS }}
+        run: python3 tools/sync_partner_feed.py --validate-only
       - name: Refresh YML catalogs
+        if: github.event_name == 'schedule' || !inputs.validate_only
         env:
           SUPABASE_URL: https://nmiafhzpzhowzfgdtotb.supabase.co
           TOYTOWN_PARTNER_FEEDS: ${{ secrets.TOYTOWN_PARTNER_FEEDS }}
