@@ -6,7 +6,8 @@ import { resolve } from 'node:path';
 
 if (!process.argv[2]) throw new Error('Pass the installed PGlite module path');
 const { PGlite } = await import(pathToFileURL(resolve(process.argv[2])).href);
-const database = new PGlite();
+const { pgcrypto } = await import(new URL('./contrib/pgcrypto.js', pathToFileURL(resolve(process.argv[2]))));
+const database = new PGlite({ extensions: { pgcrypto } });
 const root = fileURLToPath(new URL('../', import.meta.url));
 try {
   for (const path of [
@@ -17,10 +18,24 @@ try {
     'supabase/migrations/20261121170019_delete_own_content.sql',
     'supabase/migrations/20261123122152_family_shop_shelves_and_chat_clearing.sql',
   ]) await database.exec(await readFile(resolve(root, path), 'utf8'));
-  for (const path of ['test/sql/delete_own_content.sql', 'test/sql/public_family_shops.sql', 'test/sql/shop_shelves.sql', 'test/sql/clear_conversation.sql']) {
-    const results = await database.exec(await readFile(resolve(root, path), 'utf8'));
-    for (const result of results) for (const row of result.rows ?? []) {
-      if (row.result) console.log(row.result);
+  for (const path of [
+    'test/sql/delete_own_content.sql',
+    'test/sql/public_family_shops.sql',
+    'test/sql/shop_shelves.sql',
+    'test/sql/clear_conversation.sql',
+    'test/sql/guardian_fixture.sql',
+    'supabase/migrations/20261124100000_hide_completed_agreements.sql',
+    'supabase/migrations/20261126060442_marketplace_completion.sql',
+    'supabase/migrations/20261126060446_guardian_sessions.sql',
+    'test/sql/guardian_marketplace.sql',
+  ]) {
+    try {
+      const results = await database.exec(await readFile(resolve(root, path), 'utf8'));
+      for (const result of results) for (const row of result.rows ?? []) {
+        if (row.result) console.log(row.result);
+      }
+    } catch (error) {
+      throw new Error(`${path}: ${error.message} ${error.where ?? ''}`);
     }
   }
 } finally {

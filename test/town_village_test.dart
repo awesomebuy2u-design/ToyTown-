@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toytown/town_village.dart';
+import 'package:toytown/world_art.dart';
 
 Widget reduced(Widget child, {double scale = 1}) => MaterialApp(
   builder: (context, content) => MediaQuery(data: MediaQuery.of(context).copyWith(
@@ -124,17 +125,17 @@ void main() {
 
   testWidgets('daily pet activities persist and cannot repeat on same day', (tester) async {
     Widget activities() => reduced(const SingleChildScrollView(
-      child: DailyPetActivities(petName: 'Пухнастик')));
+      child: DailyPetActivities(petName: 'Пухнастик', portrait: PetPortrait(kind: 'cat', bow: true))));
     await tester.pumpWidget(activities());
     await tester.pumpAndSettle();
     expect(find.textContaining('Сьогодні виконано 0 із 3'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-daily-feed')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pet-reaction-🐰🥕')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pet-reaction-feed')), findsOneWidget);
     expect(find.text('Нагодовано'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-daily-play')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pet-reaction-🐰🎾')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pet-reaction-play')), findsOneWidget);
     expect(find.textContaining('Сьогодні виконано 2 із 3'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('village-daily-walk')));
     await tester.pumpAndSettle();
@@ -156,7 +157,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('pet-walk-next')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pet-reaction-🐰🌳')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pet-reaction-walk')), findsOneWidget);
     expect(find.textContaining('Сьогодні виконано 3 із 3'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(activities());
@@ -164,7 +165,16 @@ void main() {
     expect(find.textContaining('Сьогодні виконано 3 із 3'), findsOneWidget);
     expect(find.text('Нагодовано'), findsOneWidget);
     expect(find.text('Погралися'), findsOneWidget);
-    expect(find.text('Прогулялися'), findsOneWidget);
+    expect(find.text('Прогулятися ще раз'), findsOneWidget);
+    await tester.tap(find.text('Прогулятися ще раз'));
+    await tester.pumpAndSettle();
+    final companion = tester.widget<PetPortrait>(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(PetPortrait)));
+    expect(companion.kind, 'cat');
+    expect(companion.bow, isTrue);
+    await tester.tap(find.text('Повернутися'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Сьогодні виконано 3 із 3'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('pet-walk-collection')));
     await tester.pumpAndSettle();
     expect(find.text('Зібрано 3 із 3 предметів'), findsOneWidget);

@@ -1,13 +1,15 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'world_art.dart';
 
 /// These buildings are destinations, not fictional listings or other families.
 class TownVillage extends StatelessWidget {
   const TownVillage({super.key, required this.openToys, required this.openShop,
     required this.openPet, required this.openGames, required this.theme,
     required this.front, required this.balloons, required this.flowers,
-    required this.awning, required this.petName});
+    required this.awning, required this.petName, this.portrait = const PetPortrait()});
+  final PetPortrait portrait;
   final VoidCallback openToys, openShop, openPet;
   final VoidCallback? openGames;
   final String theme, front, petName;
@@ -23,7 +25,7 @@ class TownVillage extends StatelessWidget {
     const SizedBox(height: 12),
     PetKindnessQuest(petName: petName, openPet: openPet),
     const SizedBox(height: 8),
-    DailyPetActivities(petName: petName),
+    DailyPetActivities(petName: petName, portrait: portrait),
     const SizedBox(height: 16),
     Text('Куди підемо?', style: Theme.of(context).textTheme.titleLarge),
     const SizedBox(height: 8),
@@ -538,7 +540,8 @@ class _PetKindnessQuestState extends State<PetKindnessQuest> {
 
 /// Daily, device-local pet activities; never modifies purchasable star balances.
 class DailyPetActivities extends StatefulWidget {
-  const DailyPetActivities({super.key, required this.petName});
+  const DailyPetActivities({super.key, required this.petName, this.portrait = const PetPortrait()});
+  final PetPortrait portrait;
   final String petName;
 
   @override
@@ -550,7 +553,7 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
   static const _collectionKey = 'toytown.pet.walk.collection.v1';
   bool ready = false;
   bool hasCollection = false;
-  String reaction = '🐰';
+  String reaction = '';
   final Set<String> completed = <String>{};
   String get today {
     final now = DateTime.now().toLocal();
@@ -579,10 +582,10 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
   }
 
   Future<void> startWalk() async {
-    if (!ready || completed.contains('walk')) return;
+    if (!ready) return;
     final finished = await showDialog<bool>(
       context: context,
-      builder: (context) => const _PetWalkGame(),
+      builder: (context) => _PetWalkGame(portrait: widget.portrait, petName: widget.petName),
     );
     if (finished == true && mounted) await doActivity('walk');
   }
@@ -592,7 +595,7 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
     setState(() {
       completed.add(action);
       if (action == 'walk') hasCollection = true;
-      reaction = action == 'feed' ? '🐰🥕' : action == 'play' ? '🐰🎾' : '🐰🌳';
+      reaction = action;
     });
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -619,20 +622,27 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
         const Text('🐾 Щоденні пригоди з другом',
           style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text('Сьогодні виконано ${completed.length} із 3 занять. Завтра можна грати знову.'),
+        Text('Сьогодні виконано ${completed.length} із 3 занять.'),
         const SizedBox(height: 8),
         Center(child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           transitionBuilder: (child, animation) => ScaleTransition(
             scale: CurvedAnimation(parent: animation, curve: Curves.elasticOut),
             child: FadeTransition(opacity: animation, child: child)),
-          child: Text(reaction, key: ValueKey('pet-reaction-$reaction'),
-            style: const TextStyle(fontSize: 42),
-            semanticsLabel: reaction == '🐰🥕'
-              ? 'Улюбленець радіє частуванню'
-              : reaction == '🐰🎾' ? 'Улюбленець грається з м’ячиком'
-              : reaction == '🐰🌳' ? 'Улюбленець гуляє містечком'
-              : 'Улюбленець чекає на пригоду'),
+          child: Semantics(key: ValueKey('pet-reaction-$reaction'),
+            label: switch (reaction) {
+              'feed' => '${widget.petName} радіє частуванню',
+              'play' => '${widget.petName} грається з м’ячиком',
+              'walk' => '${widget.petName} гуляє містечком',
+              _ => '${widget.petName} чекає на пригоду',
+            },
+            child: SizedBox.square(dimension: 84, child: Stack(children: [
+              Positioned.fill(child: widget.portrait),
+              if (reaction.isNotEmpty) Align(alignment: Alignment.bottomRight,
+                child: Text(switch (reaction) {'feed' => '🥕', 'play' => '🎾', _ => '🍃'},
+                  style: const TextStyle(fontSize: 24))),
+            ])),
+          ),
         )),
         const SizedBox(height: 8),
         OutlinedButton.icon(
@@ -675,11 +685,10 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
             label: Text(completed.contains('play') ? 'Погралися' : 'Погратися')),
           FilledButton.tonalIcon(
             key: const ValueKey('village-daily-walk'),
-            onPressed: ready && !completed.contains('walk')
-              ? startWalk : null,
+            onPressed: ready ? startWalk : null,
             icon: Icon(completed.contains('walk')
               ? Icons.check_circle_rounded : Icons.directions_walk_rounded),
-            label: Text(completed.contains('walk') ? 'Прогулялися' : 'Прогулятися')),
+            label: Text(completed.contains('walk') ? 'Прогулятися ще раз' : 'Прогулятися')),
         ]),
       ]),
     ),
@@ -688,7 +697,9 @@ class _DailyPetActivitiesState extends State<DailyPetActivities> {
 
 /// A three-stop walking game: leaving early does not complete the daily quest.
 class _PetWalkGame extends StatefulWidget {
-  const _PetWalkGame();
+  const _PetWalkGame({required this.portrait, required this.petName});
+  final PetPortrait portrait;
+  final String petName;
 
   @override
   State<_PetWalkGame> createState() => _PetWalkGameState();
@@ -703,16 +714,16 @@ class _PetWalkGameState extends State<_PetWalkGame> {
   @override
   Widget build(BuildContext context) => AlertDialog(
     scrollable: true,
-    title: const Text('🐰 Прогулянка ToyTown'),
+    title: Text('На прогулянці · ${widget.petName}'),
     content: Column(mainAxisSize: MainAxisSize.min, children: [
       Text('Зупинка ${stop + 1} із 3'),
       const SizedBox(height: 12),
       AnimatedAlign(
         alignment: stop == 0 ? Alignment.centerLeft
           : stop == 1 ? Alignment.center : Alignment.centerRight,
-        duration: const Duration(milliseconds: 400),
+        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
-        child: const Text('🐰', style: TextStyle(fontSize: 48)),
+        child: SizedBox.square(dimension: 76, child: widget.portrait),
       ),
       const SizedBox(height: 12),
       Text(places[stop], key: const ValueKey('pet-walk-place'),

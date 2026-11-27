@@ -61,10 +61,7 @@ class _PetSceneState extends State<PetScene> with TickerProviderStateMixin {
                 child: SizedBox(
                   width: math.min(290.0, math.max(0.0, MediaQuery.sizeOf(context).width - 56)),
                   height: math.min(290.0, math.max(0.0, MediaQuery.sizeOf(context).width - 56)),
-                  child: Stack(children: [
-                  Positioned.fill(child: Image.asset('assets/pets/${widget.kind}.webp', fit: BoxFit.contain, excludeFromSemantics: true)),
-                  Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _PetClothes(kind: widget.kind, hat: widget.hat, bow: widget.bow, outfit: widget.outfit)))),
-                ]))))),
+                  child: PetPortrait(kind: widget.kind, hat: widget.hat, bow: widget.bow, outfit: widget.outfit))))),
             if (jump > .05) Positioned(top: 32-jump*15, right: 54, child: Opacity(opacity: jump.clamp(0.0,1.0).toDouble(), child: Icon(widget.activity == 'feed' ? Icons.restaurant_rounded : widget.activity == 'play' ? Icons.sports_tennis_rounded : widget.activity == 'brush' ? Icons.auto_awesome_rounded : Icons.favorite_rounded,color:const Color(0xFFE98599),size:32))),
             Positioned(top: 12, left: 12, right: 12, child: Center(
               child: Container(
@@ -87,6 +84,22 @@ class _PetSceneState extends State<PetScene> with TickerProviderStateMixin {
     ),
   );
 }
+class PetPortrait extends StatelessWidget {
+  const PetPortrait({super.key, this.kind = 'bunny', this.hat = false,
+    this.bow = false, this.outfit = 'none'});
+  final String kind, outfit;
+  final bool hat, bow;
+
+  @override
+  Widget build(BuildContext context) => AspectRatio(
+    aspectRatio: 1,
+    child: Stack(fit: StackFit.expand, children: [
+      Image.asset('assets/pets/$kind.webp', fit: BoxFit.contain, excludeFromSemantics: true),
+      CustomPaint(painter: _PetClothes(kind: kind, hat: hat, bow: bow, outfit: outfit)),
+    ]),
+  );
+}
+
 class _PetClothes extends CustomPainter {
   _PetClothes({required this.kind,required this.hat,required this.bow,required this.outfit});
   final String kind,outfit;

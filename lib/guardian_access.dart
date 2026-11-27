@@ -16,6 +16,14 @@ class GuardianAccess {
         current.difference(last) < idleLimit;
   }
 
+  Duration get remaining {
+    if (!unlocked) return Duration.zero;
+    final nowValue = now();
+    final idle = _lastActivity!.add(idleLimit).difference(nowValue);
+    final absolute = _serverExpiry!.difference(nowValue);
+    return idle < absolute ? idle : absolute;
+  }
+
   void begin(DateTime serverExpiry) {
     lock();
     final current = now();

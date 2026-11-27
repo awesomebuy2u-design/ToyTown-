@@ -26,8 +26,8 @@ class ShopShelfLayout {
     }
     return ShopShelfLayout(shelfCount: count, placements: positions);
   }
-  int shelfFor(String id, int index) =>
-      placements[id]?.clamp(0, shelfCount - 1).toInt() ?? index % shelfCount;
+  int shelfFor(String id, int index, [int? preferred]) =>
+      placements[id]?.clamp(0, shelfCount - 1).toInt() ?? preferred?.clamp(0, shelfCount - 1).toInt() ?? index % shelfCount;
   Map<String, dynamic> toMap() => {
     'shelf_count': shelfCount,
     'placements': placements,
@@ -136,7 +136,7 @@ class ShelfCabinet extends StatelessWidget {
               padding: EdgeInsets.all(4),
               child: Text('Очікує підтвердження', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Color(0xFF805A18))),
             ),
-          if (editable)
+          if (editable && item.status != 'pending')
             PopupMenuButton<int>(
               key: ValueKey('move-toy-${item.id}'),
               tooltip: 'Переставити ${item.title}',
@@ -277,7 +277,7 @@ class ShelfCabinet extends StatelessWidget {
                   const SizedBox(height: 8),
                   if (![
                     for (var i = 0; i < items.length; i++)
-                      if (layout.shelfFor(items[i].id, i) == shelf) items[i],
+                      if (layout.shelfFor(items[i].id, i, items[i].preferredShelf) == shelf) items[i],
                   ].isNotEmpty)
                     const SizedBox(
                       height: 88,
@@ -301,7 +301,7 @@ class ShelfCabinet extends StatelessWidget {
                     runSpacing: 12,
                     children: [
                       for (var i = 0; i < items.length; i++)
-                        if (layout.shelfFor(items[i].id, i) == shelf)
+                        if (layout.shelfFor(items[i].id, i, items[i].preferredShelf) == shelf)
                           toy(items[i]),
                     ],
                   ),
@@ -667,7 +667,7 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
       shelfCount: next.shelfCount,
       placements: {
         for (var i = 0; i < items.length; i++)
-          items[i].id: next.shelfFor(items[i].id, i),
+          items[i].id: next.shelfFor(items[i].id, i, items[i].preferredShelf),
       },
     );
     setState(() {
@@ -706,7 +706,10 @@ class _OwnShopShelvesState extends State<OwnShopShelves> {
     });
     try {
       await draftWrite;
-      await repository.save(family, next);
+      final approved = items.where((item) => item.status == 'approved').map((item) => item.id).toSet();
+      await repository.save(family, ShopShelfLayout(shelfCount: next.shelfCount, placements: {
+        for (final entry in next.placements.entries) if (approved.contains(entry.key)) entry.key: entry.value,
+      }));
       await storage.remove(key);
       if (mounted && ticket == generation)
         setState(() {

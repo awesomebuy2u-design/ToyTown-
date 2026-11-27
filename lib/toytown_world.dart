@@ -414,7 +414,8 @@ class _ToyTownWorldState extends State<ToyTownWorld> with WidgetsBindingObserver
             TownVillage(openToys: widget.openListings, openShop: () => showTab(2),
               openPet: () => showTab(1), openGames: ready && !saving && !gameOpen ? playMemoryGame : null,
               theme: shopTheme, front: shopFront, balloons: decorated, flowers: flowers,
-              awning: awning, petName: petName),
+              awning: awning, petName: petName,
+              portrait: PetPortrait(kind: petKind, hat: petHat, bow: petBow, outfit: petOutfit)),
             FilledButton.icon(
               key: const ValueKey('world-open-games'),
               onPressed: () => showTab(3),

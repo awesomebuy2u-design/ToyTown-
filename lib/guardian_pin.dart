@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 /// The verifier must authorize on the server. Never persist the PIN locally.
 Future<bool> requestGuardianPin(BuildContext context,
     Future<bool> Function(String pin) verify) async =>
-    await showDialog<bool>(context: context, barrierDismissible: false,
+    await showDialog<bool>(context: context, useRootNavigator: false, barrierDismissible: false,
       builder: (_) => _GuardianPinDialog(verify: verify)) ?? false;
 
 class _GuardianPinDialog extends StatefulWidget {
