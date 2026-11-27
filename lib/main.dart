@@ -2,9 +2,11 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import 'toytown_world.dart';
 import 'listing.dart';
+import 'listing_draft_submission.dart';
 import 'family_shops.dart';
 import 'family_shops_map.dart';
 import 'content_actions.dart';
@@ -567,7 +569,11 @@ class AddListingScreen extends StatefulWidget {
 class _AddListingScreenState extends State<AddListingScreen> {
   final title = TextEditingController(), description = TextEditingController(), city = TextEditingController();
   String category = 'Конструктори', condition = 'used', deal = 'gift';
-  bool busy = false; XFile? photo;
+  bool busy = false;
+  XFile? photo;
+  ListingDraftSubmission? submission;
+  String? submissionOwner;
+  bool get editing => !busy && submission == null;
   final price = TextEditingController(), brand = TextEditingController(), model = TextEditingController();
   final speech = stt.SpeechToText();
   bool loadingCity = true;
@@ -582,7 +588,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
       final user = client?.auth.currentUser;
       if (client == null || user == null) return;
       final settlement = await client.rpc('my_family_city');
-      if (mounted && settlement is String && city.text.isEmpty) city.text = settlement;
+      if (mounted && editing && settlement is String && city.text.isEmpty) city.text = settlement;
     } catch (_) {
       // Manual city entry remains available.
     } finally {
@@ -591,7 +597,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
   TextEditingController? dictating;
   Future<void> dictate(TextEditingController target) async {
-    if (busy) return;
+    if (!editing) return;
     if (speech.isListening) {
       await speech.stop();
       if (mounted) setState(() => dictating = null);
@@ -632,48 +638,97 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
   Widget mic(TextEditingController target) => IconButton(
     tooltip: dictating == target ? 'Зупинити диктування' : 'Продиктувати українською',
-    onPressed: busy ? null : () => dictate(target),
+    onPressed: editing ? () => dictate(target) : null,
     icon: Icon(dictating == target ? Icons.stop_circle_outlined : Icons.mic_none),
   );
   Future<void> pickPhoto(ImageSource source) async {
+    if (!editing) return;
     try {
       final selected = await ImagePicker().pickImage(source: source, imageQuality: 82, maxWidth: 1400, requestFullMetadata: false);
-      if (mounted && selected != null) setState(() => photo = selected);
+      if (mounted && editing && selected != null) setState(() => photo = selected);
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не вдалося відкрити фото. Перевірте дозвіл камери або оберіть фото з галереї.')));
     }
   }
-  Future<void> save() async {
-    if (busy) return;
-    if (title.text.trim().length < 2 || city.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вкажіть назву і місто.'))); return; }
+  Future<ListingDraftSubmission> prepareDraft(SupabaseClient client, String userId) async {
+    final toyTitle = title.text.trim();
+    final settlement = city.text.trim();
+    if (toyTitle.length < 2 || settlement.isEmpty) {
+      throw const FormatException('Вкажіть назву і місто.');
+    }
     final amount = int.tryParse(price.text.trim());
     if (deal == 'sale' && (amount == null || amount < 1 || amount > 2147483647)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Укажіть ціну в цілих гривнях.')));
-      return;
+      throw const FormatException('Укажіть ціну в цілих гривнях.');
     }
+    if (!(await SettlementIndex.shared).containsCity(settlement)) {
+      throw const FormatException('Укажіть лише назву населеного пункту України.');
+    }
+    final member = await client.from('family_members').select('family_id')
+        .eq('user_id', userId).maybeSingle();
+    if (member == null) {
+      throw const FormatException('Спочатку створіть профіль родини в кабінеті батьків.');
+    }
+    if (!mounted) throw StateError('Draft screen closed');
+    final familyId = member['family_id'];
+    final id = const Uuid().v4();
+    final image = photo;
+    final extension = image?.name.toLowerCase().split('.').last;
+    final imageSuffix = extension != null && RegExp(r'^[a-z0-9]{1,8}$').hasMatch(extension)
+        ? '.$extension' : '';
+    final path = image == null ? null : '$familyId/$id$imageSuffix';
+
+    return ListingDraftSubmission({
+      'id': id, 'family_id': familyId, 'title': toyTitle,
+      'description': description.text.trim(), 'category': category,
+      'condition': condition, 'deal_type': deal, 'city': settlement,
+      'photo_path': path, 'status': 'pending', 'preferred_shelf': widget.shelf,
+      'price': deal == 'sale' ? amount : null,
+      'brand': brand.text.trim(), 'model_code': model.text.trim(),
+    }, photoPath: path);
+  }
+
+  Future<void> save() async {
+    if (busy || dictating != null) return;
     setState(() => busy = true);
     try {
-      if (!(await SettlementIndex.shared).containsCity(city.text)) throw const FormatException('Укажіть лише назву населеного пункту України.');
-      if (!mounted) return;
-      final member = await apiFor(context).from('family_members').select('family_id').eq('user_id', db!.auth.currentUser!.id).maybeSingle();
-      if (member == null) throw Exception('Спочатку створіть профіль родини у вкладці «Родина».');
-      String? photoUrl;
-      if (photo != null) {
-        final bytes = await photo!.readAsBytes();
-        final path = '${member['family_id']}/${DateTime.now().millisecondsSinceEpoch}_${photo!.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}';
-        await apiFor(context).storage.from('listing-images').uploadBinary(path, bytes);
-        photoUrl = path;
+      final account = db;
+      final userId = account?.auth.currentUser?.id;
+      if (account == null || userId == null ||
+          (submissionOwner != null && submissionOwner != userId)) {
+        throw const FormatException('Увійдіть в акаунт цієї родини.');
       }
-      await apiFor(context).from('listings').insert({
-        'family_id': member['family_id'], 'title': title.text.trim(),
-        'description': description.text.trim(), 'category': category,
-        'condition': condition, 'deal_type': deal, 'city': city.text.trim(),
-        'photo_path': photoUrl, 'status': 'pending', 'preferred_shelf': widget.shelf,
-        'price': deal == 'sale' ? amount : null, 'brand': brand.text.trim(), 'model_code': model.text.trim()
-      });
-      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Оголошення надіслано батькам на підтвердження.'))); Navigator.pop(context); }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'))); }
-    finally { if (mounted) setState(() => busy = false); }
+      final draft = submission ?? await prepareDraft(account, userId);
+      if (!mounted || account.auth.currentUser?.id != userId) return;
+      submissionOwner = userId;
+      submission = draft;
+      final selectedPhoto = photo;
+      final images = account.storage.from('listing-images');
+      await draft.send(
+        uploadPhoto: (path) async {
+          final bytes = await selectedPhoto!.readAsBytes();
+          await images.uploadBinary(path, bytes);
+        },
+        photoExists: images.exists,
+        saveDraft: (row) async {
+          if (account.auth.currentUser?.id != userId) {
+            throw const FormatException('Увійдіть в акаунт цієї родини.');
+          }
+          await account.from('listings').upsert(row, onConflict: 'id', ignoreDuplicates: true);
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Оголошення надіслано батькам на підтвердження.')));
+      Navigator.pop(context);
+    } on FormatException catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Не вдалося надіслати іграшку. Перевірте інтернет і повторіть спробу.')));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
   @override
   void dispose() { speech.cancel(); price.dispose(); brand.dispose(); model.dispose(); title.dispose(); description.dispose(); city.dispose(); super.dispose(); }
@@ -681,22 +736,22 @@ class _AddListingScreenState extends State<AddListingScreen> {
   Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: Text(widget.shelf == null ? 'Нова іграшка' : 'Нова іграшка · полиця ${widget.shelf! + 1}')), body: ListView(padding: const EdgeInsets.all(16), children: [
     const Text('Сфотографуй тільки іграшку, без облич, адрес чи особистих речей.'),
     const SizedBox(height: 8),
-    FilledButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.camera), icon: const Icon(Icons.camera_alt_outlined), label: const Text('Сфотографувати іграшку')),
+    FilledButton.icon(onPressed: editing ? () => pickPhoto(ImageSource.camera) : null, icon: const Icon(Icons.camera_alt_outlined), label: const Text('Сфотографувати іграшку')),
     if (photo != null) FutureBuilder(future: photo!.readAsBytes(), builder: (context, snap) => snap.hasData ? Image.memory(snap.data!, height: 160, fit: BoxFit.contain) : const SizedBox.shrink()),
-    TextField(controller: title, maxLength: 80, decoration: InputDecoration(labelText: 'Назва іграшки', border: const OutlineInputBorder(), suffixIcon: mic(title))),
-    const SizedBox(height: 12), TextField(controller: description, maxLines: 3, decoration: InputDecoration(labelText: 'Опис', border: const OutlineInputBorder(), suffixIcon: mic(description))),
-    const SizedBox(height: 12), TextField(controller: city, enabled: !loadingCity && !busy, decoration: InputDecoration(labelText: 'Місто (без адреси)', border: const OutlineInputBorder(), helperText: loadingCity ? 'Завантажуємо місто родини…' : 'Місто з профілю родини')),
-    const SizedBox(height: 12), DropdownButtonFormField(value: category, decoration: const InputDecoration(labelText: 'Категорія'), items: ['Конструктори','Ляльки','Машинки','Настільні ігри','М’які іграшки','Інше'].map((v)=>DropdownMenuItem(value:v, child:Text(v))).toList(), onChanged:(v)=>setState(()=>category=v!)),
-    const SizedBox(height: 12), DropdownButtonFormField(value: condition, decoration: const InputDecoration(labelText: 'Стан'), items: const [DropdownMenuItem(value:'new', child:Text('Нова')), DropdownMenuItem(value:'used', child:Text('Вживана'))], onChanged:(v)=>setState(()=>condition=v!)),
-    const SizedBox(height: 12), DropdownButtonFormField(value: deal, decoration: const InputDecoration(labelText: 'Формат'), items: const [DropdownMenuItem(value:'gift', child:Text('Дарування')), DropdownMenuItem(value:'exchange', child:Text('Обмін')), DropdownMenuItem(value:'sale', child:Text('Продаж'))], onChanged:(v)=>setState(()=>deal=v!)),
-    if (deal == 'sale') TextField(controller: price, keyboardType: TextInputType.number, maxLength: 10,
+    TextField(controller: title, enabled: editing, maxLength: 80, decoration: InputDecoration(labelText: 'Назва іграшки', border: const OutlineInputBorder(), suffixIcon: mic(title))),
+    const SizedBox(height: 12), TextField(controller: description, enabled: editing, maxLines: 3, decoration: InputDecoration(labelText: 'Опис', border: const OutlineInputBorder(), suffixIcon: mic(description))),
+    const SizedBox(height: 12), TextField(controller: city, enabled: !loadingCity && editing, decoration: InputDecoration(labelText: 'Місто (без адреси)', border: const OutlineInputBorder(), helperText: loadingCity ? 'Завантажуємо місто родини…' : 'Місто з профілю родини')),
+    const SizedBox(height: 12), DropdownButtonFormField<String>(initialValue: category, decoration: const InputDecoration(labelText: 'Категорія'), items: ['Конструктори','Ляльки','Машинки','Настільні ігри','М’які іграшки','Інше'].map((v)=>DropdownMenuItem(value:v, child:Text(v))).toList(), onChanged:editing ? (v)=>setState(()=>category=v!) : null),
+    const SizedBox(height: 12), DropdownButtonFormField<String>(initialValue: condition, decoration: const InputDecoration(labelText: 'Стан'), items: const [DropdownMenuItem(value:'new', child:Text('Нова')), DropdownMenuItem(value:'used', child:Text('Вживана'))], onChanged:editing ? (v)=>setState(()=>condition=v!) : null),
+    const SizedBox(height: 12), DropdownButtonFormField<String>(initialValue: deal, decoration: const InputDecoration(labelText: 'Формат'), items: const [DropdownMenuItem(value:'gift', child:Text('Дарування')), DropdownMenuItem(value:'exchange', child:Text('Обмін')), DropdownMenuItem(value:'sale', child:Text('Продаж'))], onChanged:editing ? (v)=>setState(()=>deal=v!) : null),
+    if (deal == 'sale') TextField(controller: price, enabled: editing, keyboardType: TextInputType.number, maxLength: 10,
       decoration: const InputDecoration(labelText: 'Ціна, грн')),
     ExpansionTile(title: const Text('Марка та модель (за бажанням)'), children: [
-      TextField(controller: brand, maxLength: 80, decoration: const InputDecoration(labelText: 'Марка')),
-      TextField(controller: model, maxLength: 80, decoration: const InputDecoration(labelText: 'Модель або артикул')),
+      TextField(controller: brand, enabled: editing, maxLength: 80, decoration: const InputDecoration(labelText: 'Марка')),
+      TextField(controller: model, enabled: editing, maxLength: 80, decoration: const InputDecoration(labelText: 'Модель або артикул')),
     ]),
-    const SizedBox(height: 12), OutlinedButton.icon(onPressed: busy ? null : () => pickPhoto(ImageSource.gallery), icon: const Icon(Icons.photo), label: Text(photo == null ? 'Додати фото' : 'Фото вибрано')),
-    const SizedBox(height: 8), FilledButton(onPressed: busy || loadingCity || dictating != null ? null : save, child: Text(busy ? 'Збереження…' : 'Показати батькам')),
+    const SizedBox(height: 12), OutlinedButton.icon(onPressed: editing ? () => pickPhoto(ImageSource.gallery) : null, icon: const Icon(Icons.photo), label: Text(photo == null ? 'Додати фото' : 'Фото вибрано')),
+    const SizedBox(height: 8), FilledButton(onPressed: busy || loadingCity || dictating != null ? null : save, child: Text(busy ? 'Збереження…' : submission == null ? 'Показати батькам' : 'Повторити надсилання')),
     const SizedBox(height: 12), const Text('Оголошення не публікується автоматично. Воно очікує перевірки дорослим.', style: TextStyle(color: Colors.black54)),
   ]));
 }

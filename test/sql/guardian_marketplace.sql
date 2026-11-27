@@ -49,6 +49,11 @@ begin
   exception when insufficient_privilege then null; end;
   insert into public.listings(family_id,title,condition,deal_type,city,preferred_shelf)
     values(f,'Shop draft','used','gift','Полтава',2) returning id into b;
+  insert into public.listings(id,family_id,title,condition,deal_type,city,preferred_shelf)
+    values(b,f,'Duplicate draft','used','gift','Полтава',0) on conflict(id) do nothing;
+  if (select title from public.listings where id=b) is distinct from 'Shop draft' then
+    raise exception 'Retried child draft overwrote its original submission';
+  end if;
   if exists(select 1 from public.exchange_agreements) or exists(select 1 from public.partner_offers()) then raise exception 'Child accessed adult data'; end if;
   begin perform public.delete_own_listing(item); raise exception 'Child removed listing'; exception when insufficient_privilege then null; end;
   begin perform public.start_listing_conversation(item); raise exception 'Child opened conversation'; exception when insufficient_privilege then null; end;
