@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-const toyTownVersion = '1.0.16';
+const toyTownVersion = '1.0.17';
 
 void showToyTownVersion(BuildContext context) => showAboutDialog(
   context: context,
   useRootNavigator: false,
   applicationName: 'ToyTown',
-  applicationVersion: '$toyTownVersion · збірка 26',
+  applicationVersion: '$toyTownVersion · збірка 27',
   applicationIcon: const Icon(Icons.toys, size: 40),
 );
