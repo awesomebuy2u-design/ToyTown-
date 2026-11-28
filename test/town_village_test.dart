@@ -42,14 +42,27 @@ void main() {
       padding: const EdgeInsets.all(16),
       child: VillageMap(openToys: () => opened++, openShop: () {},
         openPet: () {}, openGames: () {}, theme: 'mint', front: 'classic',
-        balloons: false, flowers: false, awning: false),
+        balloons: false, flowers: false, awning: false, petName: 'Мурчик',
+        portrait: const PetPortrait(kind: 'cat', hat: true, bow: true, outfit: 'mint')),
     ))));
     await tester.pump();
+    final traveler = find.byKey(const ValueKey('village-traveler'));
+    final portrait = tester.widget<PetPortrait>(
+      find.descendant(of: traveler, matching: find.byType(PetPortrait)));
+    expect((portrait.kind, portrait.hat, portrait.bow, portrait.outfit),
+        ('cat', true, true, 'mint'));
     await tester.tap(find.byKey(const ValueKey('village-door-toys')));
     await tester.pump(const Duration(milliseconds: 100));
     expect(opened, 0);
     await tester.pump(const Duration(milliseconds: 800));
     expect(opened, 1);
+    await tester.tap(find.byKey(const ValueKey('village-secret-2')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Зоряний камінчик'), findsOneWidget);
+    expect(find.textContaining('Знайдено секретів: 1 із 3.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -64,10 +77,11 @@ void main() {
     )));
     await tester.pumpAndSettle();
     expect(find.text('✨ Секрети: 0/3'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
-      await tester.tap(find.byKey(ValueKey('village-secret-$i')));
+    var found = 0;
+    for (final index in [2, 0, 1]) {
+      await tester.tap(find.byKey(ValueKey('village-secret-$index')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Знайдено секретів: ${i + 1} із 3.'), findsOneWidget);
+      expect(find.textContaining('Знайдено секретів: ${++found} із 3.'), findsOneWidget);
       await tester.tap(find.text('Продовжити пригоду'));
       await tester.pumpAndSettle();
     }
