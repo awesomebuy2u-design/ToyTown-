@@ -124,7 +124,8 @@ class _GuardianPortalState extends State<GuardianPortal>
       if (deadline == null ||
           !deadline.isAfter(DateTime.now()) ||
           token is! String ||
-          token.isEmpty) return false;
+          token.isEmpty)
+        return false;
       final scoped = makeClient(token);
       if (!mounted || !foreground || epoch != generation) {
         unawaited(revoke(scoped));
@@ -180,7 +181,8 @@ class _GuardianPortalState extends State<GuardianPortal>
     final now = DateTime.now();
     if (touching ||
         (lastTouch != null &&
-            now.difference(lastTouch!) < const Duration(seconds: 5))) return;
+            now.difference(lastTouch!) < const Duration(seconds: 5)))
+      return;
     lastTouch = now;
     touching = true;
     unawaited(renew(client));
@@ -288,8 +290,9 @@ class _GuardianPortalState extends State<GuardianPortal>
   Widget entryScreen(BuildContext entry) {
     return Scaffold(
       appBar: AppBar(
-          leading: BackButton(onPressed: exitPortal),
-          title: const Text('Кабінет батьків')),
+        leading: BackButton(onPressed: exitPortal),
+        title: const Text('Кабінет батьків'),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -327,14 +330,14 @@ class _GuardianPortalState extends State<GuardianPortal>
                     onPressed: busy
                         ? null
                         : hasPin!
-                            ? () => unlock(entry)
-                            : () => configure(entry),
+                        ? () => unlock(entry)
+                        : () => configure(entry),
                     child: Text(hasPin! ? 'Увести PIN' : 'Налаштувати PIN'),
                   ),
                 if (hasPin == true)
                   TextButton(
                     onPressed: busy ? null : () => configure(entry),
-                    child: const Text('Відновити PIN через пошту'),
+                    child: const Text('Змінити або відновити PIN через пошту'),
                   ),
                 TextButton(
                   onPressed: exitPortal,

@@ -65,12 +65,12 @@ class _GuardianSetupState extends State<GuardianSetup> {
 
   Future<void> save() async {
     if (busy) return;
-    if (!RegExp(r'^[0-9]{6}$').hasMatch(pin.text) ||
+    if (!RegExp(r'^[0-9]{4}$').hasMatch(pin.text) ||
         pin.text != repeat.text ||
         (!emailVerified && proof.text.trim().isEmpty)) {
       setState(
         () => message =
-            'Уведіть підтвердження доступу та двічі той самий шестизначний PIN.',
+            'Уведіть підтвердження доступу та двічі той самий чотиризначний PIN.',
       );
       return;
     }
@@ -109,8 +109,8 @@ class _GuardianSetupState extends State<GuardianSetup> {
           () => message = emailVerified
               ? 'Не вдалося зберегти PIN. Повторіть спробу. Якщо минуло понад 10 хвилин, замовте новий лист.'
               : widget.recovery
-                  ? 'Не вдалося підтвердити код або посилання. За потреби замовте новий лист.'
-                  : 'Не вдалося створити PIN. Перевірте пароль від акаунта й повторіть.',
+              ? 'Не вдалося підтвердити код або посилання. За потреби замовте новий лист.'
+              : 'Не вдалося створити PIN. Перевірте пароль від акаунта й повторіть.',
         );
     } finally {
       if (mounted) setState(() => busy = false);
@@ -175,66 +175,66 @@ class _GuardianSetupState extends State<GuardianSetup> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: Text(widget.recovery ? 'Відновлення PIN' : 'Створення PIN'),
+    appBar: AppBar(
+      title: Text(widget.recovery ? 'Відновлення PIN' : 'Створення PIN'),
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text(
+          widget.recovery
+              ? 'Підтвердьте доступ до пошти $email.'
+              : 'Уведіть пароль дорослого від акаунта $email.',
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text(
-              widget.recovery
-                  ? 'Підтвердьте доступ до пошти $email.'
-                  : 'Уведіть пароль дорослого від акаунта $email.',
+        if (widget.recovery)
+          TextButton(
+            onPressed: busy ? null : sendCode,
+            child: Text(
+              challenge == null ? 'Надіслати лист' : 'Надіслати ще раз',
             ),
-            if (widget.recovery)
-              TextButton(
-                onPressed: busy ? null : sendCode,
-                child: Text(
-                  challenge == null ? 'Надіслати лист' : 'Надіслати ще раз',
-                ),
-              ),
-            if (emailVerified)
-              const Text('Пошту підтверджено.')
-            else
-              TextField(
-                controller: proof,
-                enabled: !busy,
-                obscureText: true,
-                autocorrect: false,
-                enableSuggestions: false,
-                decoration: InputDecoration(
-                  labelText: widget.recovery
-                      ? 'Код або посилання з листа'
-                      : 'Пароль акаунта',
-                ),
-              ),
-            for (final field in [pin, repeat])
-              TextField(
-                controller: field,
-                enabled: !busy,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(6),
-                ],
-                decoration: InputDecoration(
-                  labelText:
-                      field == pin ? 'Новий PIN із 6 цифр' : 'Повторіть PIN',
-                ),
-              ),
-            if (message != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(message!),
-              ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed:
-                  busy || (widget.recovery && challenge == null) ? null : save,
-              child: Text(busy ? 'Зачекайте…' : 'Зберегти PIN'),
+          ),
+        if (emailVerified)
+          const Text('Пошту підтверджено.')
+        else
+          TextField(
+            controller: proof,
+            enabled: !busy,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              labelText: widget.recovery
+                  ? 'Код або посилання з листа'
+                  : 'Пароль акаунта',
             ),
-          ],
+          ),
+        for (final field in [pin, repeat])
+          TextField(
+            controller: field,
+            enabled: !busy,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
+            decoration: InputDecoration(
+              labelText: field == pin ? 'Новий PIN із 4 цифр' : 'Повторіть PIN',
+            ),
+          ),
+        if (message != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(message!),
+          ),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: busy || (widget.recovery && challenge == null)
+              ? null
+              : save,
+          child: Text(busy ? 'Зачекайте…' : 'Зберегти PIN'),
         ),
-      );
+      ],
+    ),
+  );
 }

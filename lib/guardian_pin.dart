@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// The verifier must authorize on the server. Never persist the PIN locally.
-Future<bool> requestGuardianPin(BuildContext context,
-    Future<bool> Function(String pin) verify) async =>
-    await showDialog<bool>(context: context, useRootNavigator: false, barrierDismissible: false,
-      builder: (_) => _GuardianPinDialog(verify: verify)) ?? false;
+Future<bool> requestGuardianPin(
+  BuildContext context,
+  Future<bool> Function(String pin) verify,
+) async =>
+    await showDialog<bool>(
+      context: context,
+      useRootNavigator: false,
+      barrierDismissible: false,
+      builder: (_) => _GuardianPinDialog(verify: verify),
+    ) ??
+    false;
 
 class _GuardianPinDialog extends StatefulWidget {
   const _GuardianPinDialog({required this.verify});
@@ -17,12 +24,20 @@ class _GuardianPinDialog extends StatefulWidget {
 class _GuardianPinDialogState extends State<_GuardianPinDialog> {
   final pin = TextEditingController();
   bool busy = false;
+  bool get hasValidLength => pin.text.length == 4 || pin.text.length == 6;
   String? error;
   @override
-  void dispose() { pin.dispose(); super.dispose(); }
+  void dispose() {
+    pin.dispose();
+    super.dispose();
+  }
+
   Future<void> submit() async {
-    if (busy || !RegExp(r'^[0-9]{6}$').hasMatch(pin.text)) return;
-    setState(() { busy = true; error = null; });
+    if (busy || !hasValidLength) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
     try {
       final accepted = await widget.verify(pin.text);
       if (!mounted) return;
@@ -40,20 +55,38 @@ class _GuardianPinDialogState extends State<_GuardianPinDialog> {
       if (mounted) setState(() => busy = false);
     }
   }
+
   @override
-  Widget build(BuildContext context) => PopScope(canPop: !busy,
-    child: AlertDialog(title: const Text('Батьківський доступ'),
-      content: TextField(controller: pin, obscureText: true,
-        enabled: !busy, keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(6)],
-        decoration: InputDecoration(labelText: 'PIN-код із 6 цифр', errorText: error),
+  Widget build(BuildContext context) => PopScope(
+    canPop: !busy,
+    child: AlertDialog(
+      title: const Text('Батьківський доступ'),
+      content: TextField(
+        controller: pin,
+        obscureText: true,
+        enabled: !busy,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(6),
+        ],
+        decoration: InputDecoration(
+          labelText: 'PIN-код (4 або 6 цифр)',
+          errorText: error,
+        ),
         onChanged: (_) => setState(() => error = null),
-        onSubmitted: (_) => submit()),
+        onSubmitted: (_) => submit(),
+      ),
       actions: [
-        TextButton(onPressed: busy ? null : () => Navigator.of(context).pop(false),
-          child: const Text('До містечка')),
-        FilledButton(onPressed: busy || pin.text.length != 6 ? null : submit,
-          child: Text(busy ? 'Перевірка…' : 'Увійти')),
-      ]));
+        TextButton(
+          onPressed: busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('До містечка'),
+        ),
+        FilledButton(
+          onPressed: busy || !hasValidLength ? null : submit,
+          child: Text(busy ? 'Перевірка…' : 'Увійти'),
+        ),
+      ],
+    ),
+  );
 }
