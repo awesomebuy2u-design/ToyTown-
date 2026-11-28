@@ -21,7 +21,7 @@ class TownVillage extends StatelessWidget {
     const SizedBox(height: 12),
     VillageMap(openToys: openToys, openShop: openShop, openPet: openPet,
       openGames: openGames, theme: theme, front: front, balloons: balloons,
-      flowers: flowers, awning: awning),
+      flowers: flowers, awning: awning, petName: petName, portrait: portrait),
     const SizedBox(height: 12),
     PetKindnessQuest(petName: petName, openPet: openPet),
     const SizedBox(height: 8),
@@ -46,10 +46,12 @@ class TownVillage extends StatelessWidget {
 class VillageMap extends StatefulWidget {
   const VillageMap({super.key, required this.openToys, required this.openShop,
     required this.openPet, required this.openGames, required this.theme,
-    required this.front, required this.balloons, required this.flowers, required this.awning});
+    required this.front, required this.balloons, required this.flowers, required this.awning,
+    this.petName = 'Улюбленець', this.portrait = const PetPortrait()});
   final VoidCallback openToys, openShop, openPet;
   final VoidCallback? openGames;
-  final String theme, front;
+  final String theme, front, petName;
+  final PetPortrait portrait;
   final bool balloons, flowers, awning;
   @override
   State<VillageMap> createState() => _VillageMapState();
@@ -94,16 +96,20 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
 
   static const treasures = <({Offset position, String title, String message})>[
     (position: Offset(40, 251), title: 'Метелик дружби',
-      message: 'Метелик прилетів привітатися! Ти знайшов перший секрет містечка.'),
+      message: 'Метелик прилетів привітатися! Поглянь, як він махає крильцями.'),
     (position: Offset(361, 251), title: 'Чарівна квітка',
       message: 'Квітка розквітла! У ToyTown навіть маленькі відкриття — це пригода.'),
     (position: Offset(200, 464), title: 'Зоряний камінчик',
-      message: 'Ти відкрив останній секрет! Усі три скарби містечка знайдено.'),
+      message: 'Камінчик виблискує, наче маленька зірка.'),
   ];
   bool get walking => walk.isAnimating;
 
+  void visitTreasure(int index) {
+    if (!_secretsReady) return;
+    visit(treasures[index].position, () => discover(index));
+  }
+
   void discover(int index) {
-    if (walking || !_secretsReady) return;
     final firstDiscovery = discovered.add(index);
     if (firstDiscovery) { setState(() {}); saveSecrets(); }
     final treasure = treasures[index];
@@ -121,6 +127,7 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
   void visit(Offset target, VoidCallback? action) {
     if (action == null || walking) return;
     if (MediaQuery.disableAnimationsOf(context)) {
+      setState(() => traveler = target);
       action();
       return;
     }
@@ -161,26 +168,29 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
         Positioned.fill(child: ExcludeSemantics(child: CustomPaint(painter: _VillagePainter(
           motion: motion, theme: widget.theme, front: widget.front,
           balloons: widget.balloons, flowers: widget.flowers, awning: widget.awning)))),
-        AnimatedBuilder(animation: walk, builder: (context, child) {
-          final position = Offset.lerp(start, destination, Curves.easeInOut.transform(walk.value))!;
-          final point = walk.isAnimating ? position : traveler;
-          return Positioned(
-            left: (point.dx - 22) * scale,
-            top: (point.dy - 49 - (walk.isAnimating ? math.sin(walk.value * math.pi * 8).abs() * 4 : 0)) * scale,
-            width: 44 * scale, height: 52 * scale,
-            child: IgnorePointer(child: Semantics(
-              label: 'Пухнастий мандрівник іде до будиночка',
-              child: CustomPaint(
-                key: const ValueKey('village-traveler'),
-                painter: _TravelerPainter(
-                  walking: walk.isAnimating,
-                  step: walk.value,
-                  facingRight: destination.dx >= start.dx,
-                ),
-              ),
-            )),
-          );
-        }),
+        AnimatedBuilder(
+          animation: walk,
+          child: IgnorePointer(
+            child: Semantics(
+              key: const ValueKey('village-traveler'),
+              label: widget.petName,
+              child: widget.portrait,
+            ),
+          ),
+          builder: (context, child) {
+            final point = walking
+                ? Offset.lerp(start, destination, Curves.easeInOut.transform(walk.value))!
+                : traveler;
+            final bounce = walking ? math.sin(walk.value * math.pi * 8).abs() * 4 : 0;
+            return Positioned(
+              left: (point.dx - 28) * scale,
+              top: (point.dy - 53 - bounce) * scale,
+              width: 56 * scale,
+              height: 56 * scale,
+              child: child!,
+            );
+          },
+        ),
         if (discovered.length == treasures.length)
           Positioned(
             left: 103 * scale, top: 38 * scale,
@@ -215,7 +225,7 @@ class _VillageMapState extends State<VillageMap> with TickerProviderStateMixin {
               child: Material(color: Colors.transparent,
                 child: InkWell(
                   key: ValueKey('village-secret-$i'),
-                  onTap: () => discover(i),
+                  onTap: () => visitTreasure(i),
                   borderRadius: BorderRadius.circular(18),
                   child: Center(child: Icon(
                     discovered.contains(i) ? Icons.check_circle_rounded
@@ -402,51 +412,6 @@ class _VillagePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _VillagePainter old) => old.theme != theme || old.front != front ||
     old.balloons != balloons || old.flowers != flowers || old.awning != awning || old.motion != motion;
-}
-
-/// A small original illustrated animal companion, drawn without extra assets.
-class _TravelerPainter extends CustomPainter {
-  const _TravelerPainter({required this.walking, required this.step, required this.facingRight});
-  final bool walking, facingRight;
-  final double step;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.scale(size.width / 44, size.height / 52);
-    if (!facingRight) {
-      canvas.translate(44, 0);
-      canvas.scale(-1, 1);
-    }
-    final fur = Paint()..color = const Color(0xFFF1B78B);
-    final ear = Paint()..color = const Color(0xFFE58F9D);
-    final outline = Paint()..color = const Color(0xFF715B67);
-    final bounce = walking ? math.sin(step * math.pi * 8) * 2 : 0.0;
-    canvas.drawOval(const Rect.fromLTWH(8, 44, 28, 5), Paint()..color = const Color(0xFF618B74).withValues(alpha: .20));
-    canvas.translate(0, -bounce);
-    canvas.drawOval(const Rect.fromLTWH(10, 23, 24, 23), fur);
-    final stride = walking ? math.sin(step * math.pi * 8) * 3 : 0.0;
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(12 + stride, 40, 8, 9), const Radius.circular(4)), fur);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(24 - stride, 40, 8, 9), const Radius.circular(4)), fur);
-    canvas.drawOval(const Rect.fromLTWH(5, 4, 13, 24), fur);
-    canvas.drawOval(const Rect.fromLTWH(26, 4, 13, 24), fur);
-    canvas.drawOval(const Rect.fromLTWH(9, 8, 6, 15), ear);
-    canvas.drawOval(const Rect.fromLTWH(30, 8, 6, 15), ear);
-    canvas.drawCircle(const Offset(22, 25), 17, fur);
-    canvas.drawOval(const Rect.fromLTWH(14, 27, 16, 11), Paint()..color = const Color(0xFFFFE5CF));
-    canvas.drawCircle(const Offset(16, 23), 2, outline);
-    canvas.drawCircle(const Offset(28, 23), 2, outline);
-    canvas.drawCircle(const Offset(22, 29), 2.5, outline);
-    final scarf = Path()..moveTo(9, 37)..quadraticBezierTo(22, 42, 35, 37)
-      ..lineTo(34, 41)..quadraticBezierTo(22, 46, 10, 41)..close();
-    canvas.drawPath(scarf, Paint()..color = const Color(0xFF8875CB));
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _TravelerPainter oldDelegate) =>
-      oldDelegate.walking != walking || oldDelegate.step != step ||
-      oldDelegate.facingRight != facingRight;
 }
 
 /// A gentle, one-time companion quest. This is a cosmetic achievement:
