@@ -104,12 +104,12 @@ begin
   perform set_config('request.jwt.claims',replace(recovery_claims::text,'"otp"','"password"'),true);
   execute 'set local role authenticated';
   begin
-    perform public.finish_guardian_setup(challenge,'444222');
+    perform public.finish_guardian_setup(challenge,'0427');
     raise exception 'A password could replace an existing PIN';
   exception when insufficient_privilege then null;
   end;
   perform set_config('request.jwt.claims',recovery_claims::text,true);
-  perform public.finish_guardian_setup(challenge,'444222');
+  perform public.finish_guardian_setup(challenge,'0427');
   begin
     perform public.finish_guardian_setup(challenge,'123456');
     raise exception 'An already used email challenge accepted';
@@ -117,8 +117,14 @@ begin
   end;
   perform set_config('request.jwt.claims',claims::text,true);
   if private.guardian_valid() then raise exception 'Recovery retained an elevated session'; end if;
-  if public.unlock_guardian('555111') is not null or public.unlock_guardian('444222') is null then
+  if public.unlock_guardian('555111') is not null or public.unlock_guardian('0427') is null then
     raise exception 'Recovery did not replace the PIN';
+  end if;
+  for i in 1..5 loop
+    perform public.unlock_guardian('9999');
+  end loop;
+  if public.unlock_guardian('0427') is not null then
+    raise exception 'Four-digit PIN lockout failed';
   end if;
   execute 'reset role';
   update public.listings set status='approved' where id=b;
