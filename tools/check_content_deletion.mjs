@@ -26,7 +26,7 @@ try {
     'test/sql/guardian_fixture.sql',
     'supabase/migrations/20261124100000_hide_completed_agreements.sql',
     'supabase/migrations/20261127055516_toytown_1_0_16_guardian_marketplace.sql',
-    'supabase/migrations/20261128053237_guardian_four_digit_pins.sql',
+    'supabase/migrations/20261128121910_guardian_four_digit_pins.sql',
     'test/sql/guardian_marketplace.sql',
   ]) {
     try {
